@@ -1,0 +1,351 @@
+/* ============================================
+   WelcomeView — First page
+   ============================================ */
+
+.welcome {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* Hide all overflow here as well to guarantee nothing escapes the screen */
+  overflow: hidden;
+  background: var(--lk-bg);
+}
+
+.welcome--exiting {
+  animation: fadeOut 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.welcome__content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 680px;
+  padding: 0 24px;
+}
+
+.welcome__title {
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--lk-text);
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.welcome__subtitle {
+  font-size: 15px;
+  color: var(--lk-text-secondary);
+  margin-bottom: 40px;
+  text-align: center;
+}
+
+.welcome__form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.welcome__input {
+  width: 100%;
+  padding: 16px 20px;
+  min-height: 120px;
+  font-size: 16px;
+  line-height: 1.5;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--lk-text);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  outline: none;
+  resize: none;
+  transition: all 0.2s ease;
+}
+
+.welcome__input::placeholder {
+  color: var(--lk-text-tertiary);
+}
+
+.welcome__input:focus {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Naming step */
+.welcome__name-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.welcome__name-input {
+  width: 100%;
+  padding: 16px 20px;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--lk-text);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  outline: none;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.welcome__name-input:focus {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.welcome__name-input:disabled {
+  opacity: 0.5;
+}
+
+.welcome__name-loading {
+  position: absolute;
+  right: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: var(--lk-text-tertiary);
+}
+
+.welcome__actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.welcome__submit {
+  flex: 1;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #111;
+  background: #ededed;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.welcome__submit:hover {
+  background: #ffffff;
+}
+
+.welcome__submit:disabled {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.3);
+  cursor: not-allowed;
+}
+
+.welcome__cancel {
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--lk-text);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.welcome__cancel:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.welcome__hint {
+  font-size: 12px;
+  color: var(--lk-text-tertiary);
+  text-align: center;
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.welcome__kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  background: var(--lk-bg-hover);
+  border: 1px solid var(--lk-border);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* Projects List */
+.welcome__projects-list {
+  width: 100%;
+  margin-top: 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.welcome__projects-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--lk-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.welcome__projects-scroll-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 8px; /* space for scrollbar */
+}
+
+/* Custom scrollbar for the projects list */
+.welcome__projects-scroll-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.welcome__projects-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.welcome__projects-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+.welcome__projects-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.welcome__project-item {
+  background: transparent;
+  border-radius: 6px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  border: none;
+}
+
+.welcome__project-item:hover {
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.welcome__project-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--lk-text-secondary);
+}
+
+.welcome__project-item:hover .welcome__project-icon {
+  color: var(--lk-text);
+}
+
+.welcome__project-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.welcome__project-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--lk-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.welcome__project-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--lk-text-tertiary);
+}
+
+.welcome__project-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.welcome__project-status--active {
+  color: #4ade80;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.welcome__project-status--active::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4ade80;
+  display: inline-block;
+}
+
+.welcome__project-status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--lk-text-tertiary);
+  display: inline-block;
+}
+
+.welcome__project-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.welcome__project-item:hover .welcome__project-actions {
+  opacity: 1;
+}
+
+.welcome__project-btn {
+  background: transparent;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--lk-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.welcome__project-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--lk-text);
+}
+
+.welcome__project-btn--danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
