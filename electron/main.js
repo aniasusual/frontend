@@ -1,12 +1,20 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, shell } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Load frontend .env configuration
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
 // Determine if we are in development mode
 const isDev = process.env.NODE_ENV === 'development';
+
+const devPort = process.env.VITE_PORT || 5173;
+const devHost = process.env.VITE_HOST || 'localhost';
+const devUrl = process.env.ELECTRON_DEV_URL || `http://${devHost}:${devPort}`;
 
 let mainWindow;
 
@@ -17,14 +25,23 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false, // For simplicity we are allowing nodeIntegration, though in real production contextIsolation should be true
-      webviewTag: true // To support webview if needed, or we just use iframe
+      webviewTag: true, // To support webview if needed, or we just use iframe
     },
     show: false, // Don't show until ready-to-show
   });
 
+  // Open all external URLs in the user's default web browser (Chrome/Safari/etc.)
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http:') || url.startsWith('https:')) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
+
   if (isDev) {
-    // Load Vite dev server URL
-    mainWindow.loadURL('http://localhost:5173');
+    // Load Vite dev server URL from environment
+    mainWindow.loadURL(devUrl);
     // Open the DevTools.
     mainWindow.webContents.openDevTools();
   } else {

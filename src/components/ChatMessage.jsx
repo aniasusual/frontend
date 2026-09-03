@@ -2,51 +2,70 @@ import { useState, useEffect } from 'react';
 import './ChatMessage.css';
 
 const CopyIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
   </svg>
 );
 
 const LoaderIcon = () => (
-  <svg className="chat-msg__loader" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg className="chat-msg__loader" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10" opacity="0.25"></circle>
     <path d="M12 2a10 10 0 0 1 10 10"></path>
   </svg>
 );
 
 const ChevronIcon = ({ expanded }) => (
-  <svg 
+  <svg
     className={`chat-msg__chevron ${expanded ? 'chat-msg__chevron--expanded' : ''}`}
-    width="14" 
-    height="14" 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
   >
     <polyline points="9 18 15 12 9 6"></polyline>
   </svg>
 );
 
+const ToolIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+  </svg>
+);
+
+const FileIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+    <polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"></polyline>
+  </svg>
+);
+
 const AgentIcon = () => (
-  <svg className="chat-msg__agent-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="9" width="18" height="12" rx="2"></rect>
-    <path d="M12 9V5"></path>
-    <path d="M10 2h4"></path>
-    <circle cx="9" cy="15" r="1.5" fill="currentColor"></circle>
-    <circle cx="15" cy="15" r="1.5" fill="currentColor"></circle>
-    <path d="M10 19h4"></path>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+    <rect x="9" y="9" width="6" height="6"></rect>
+    <line x1="9" y1="1" x2="9" y2="4"></line>
+    <line x1="15" y1="1" x2="15" y2="4"></line>
+    <line x1="9" y1="20" x2="9" y2="23"></line>
+    <line x1="15" y1="20" x2="15" y2="23"></line>
   </svg>
 );
 
 const MessageFooter = ({ timestamp, contentToCopy }) => {
   const [copied, setCopied] = useState(false);
-  
+
   const handleCopy = (e) => {
-    e.stopPropagation(); // prevent expanding/collapsing if clicked inside a header
+    e.stopPropagation();
     if (contentToCopy) {
       const text = typeof contentToCopy === 'string' ? contentToCopy : JSON.stringify(contentToCopy, null, 2);
       navigator.clipboard.writeText(text);
@@ -54,16 +73,16 @@ const MessageFooter = ({ timestamp, contentToCopy }) => {
       setTimeout(() => setCopied(false), 2000);
     }
   };
-  
+
   const timeValue = timestamp ? new Date(timestamp) : new Date();
   const timeString = timeValue.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  
+
   return (
     <div className="chat-msg__footer">
       <span className="chat-msg__time">{timeString}</span>
       {contentToCopy && (
-        <button className="chat-msg__copy" onClick={handleCopy} title="Copy">
-          {copied ? '✓' : <CopyIcon />}
+        <button className="chat-msg__copy" onClick={handleCopy} title="Copy text">
+          {copied ? <CheckIcon /> : <CopyIcon />}
         </button>
       )}
     </div>
@@ -71,8 +90,7 @@ const MessageFooter = ({ timestamp, contentToCopy }) => {
 };
 
 /**
- * ChatMessage — Renders a single chat message bubble.
- * Styled based on its type: user, status, tool_call, tool_result, token, thinking.
+ * ChatMessage — Renders a single chat message bubble with Notion minimalism.
  */
 export default function ChatMessage({ message, isActive }) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -105,10 +123,22 @@ export default function ChatMessage({ message, isActive }) {
   // Tool call
   if (message.type === 'tool_call') {
     const isRunning = isActive && !message.collapsed;
-    const argsStr = message.arguments 
+    const argsStr = message.arguments
       ? (typeof message.arguments === 'string' ? message.arguments : JSON.stringify(message.arguments, null, 2))
       : '';
-      
+
+    // Extract file targets for friendly display
+    let fileList = [];
+    if (message.name === 'write_files') {
+      if (Array.isArray(message.arguments)) {
+        fileList = message.arguments.map(f => f?.file_path).filter(Boolean);
+      } else if (message.arguments?.files && Array.isArray(message.arguments.files)) {
+        fileList = message.arguments.files.map(f => f?.file_path).filter(Boolean);
+      }
+    } else if ((message.name === 'write_file' || message.name === 'read_file' || message.name === 'edit_file') && message.arguments?.file_path) {
+      fileList = [message.arguments.file_path];
+    }
+
     return (
       <div className="chat-msg chat-msg--tool_call">
         <div className="chat-msg__assistant-row">
@@ -118,7 +148,19 @@ export default function ChatMessage({ message, isActive }) {
           <div className="chat-msg__content" style={{ flex: 1, minWidth: 0 }}>
             <div className="chat-msg__box">
               <div className="chat-msg__header" onClick={toggleExpand} style={{ cursor: 'pointer' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>⚙ {message.name}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <ToolIcon />
+                  <span>{message.name}</span>
+                  {fileList.length > 0 && (
+                    <div className="chat-msg__file-badges">
+                      {fileList.map((fp, i) => (
+                        <span key={i} className="chat-msg__file-badge">
+                          <FileIcon /> {fp}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <span style={{ display: 'flex', alignItems: 'center' }}>
                   {isRunning ? <LoaderIcon /> : <ChevronIcon expanded={isExpanded} />}
                 </span>
@@ -144,7 +186,9 @@ export default function ChatMessage({ message, isActive }) {
           <div className="chat-msg__content" style={{ flex: 1, minWidth: 0 }}>
             <div className="chat-msg__box">
               <div className="chat-msg__header" onClick={toggleExpand} style={{ cursor: 'pointer' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>✓ {message.name} result:</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CheckIcon /> {message.name}
+                </span>
                 <span style={{ display: 'flex', alignItems: 'center' }}>
                   <ChevronIcon expanded={isExpanded} />
                 </span>
