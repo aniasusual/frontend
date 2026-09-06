@@ -149,10 +149,32 @@ function App() {
           return;
         }
 
+        // Handle Real-Time LLM Debug Inspection Payload
+
+        if (data.type === 'llm_debug' && data.debug) {
+          setMessages((prev) => {
+            if (prev.length === 0) return prev;
+            const updated = [...prev];
+            // Attach debug to the user message of this turn if needed
+            const lastUserIdx = updated.map((m) => m.role === 'user' || m.type === 'user').lastIndexOf(true);
+            if (lastUserIdx >= 0 && (!updated[lastUserIdx].debug || data.target === 'user')) {
+              updated[lastUserIdx] = { ...updated[lastUserIdx], debug: data.debug };
+            }
+            // Also attach to the most recent assistant or tool message in progress
+            const lastIdx = updated.length - 1;
+            if (lastIdx >= 0 && lastIdx !== lastUserIdx) {
+              updated[lastIdx] = { ...updated[lastIdx], debug: data.debug };
+            }
+            return updated;
+          });
+          return;
+        }
+
         const isTerminalStatus =
           data.type === 'status' &&
           (data.content === 'Done' ||
             data.content?.startsWith('Error') ||
+
             data.content?.startsWith('Harness Error') ||
             data.content?.startsWith('Ollama Error') ||
             data.content?.startsWith('Stopped'));

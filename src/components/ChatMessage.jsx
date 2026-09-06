@@ -1,10 +1,18 @@
 import { useState, useEffect } from 'react';
+import LlmDebugModal from './LlmDebugModal';
 import './ChatMessage.css';
 
 const CopyIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+  </svg>
+);
+
+const CodeIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="16 18 22 12 16 6"></polyline>
+    <polyline points="8 6 2 12 8 18"></polyline>
   </svg>
 );
 
@@ -61,7 +69,7 @@ const AgentIcon = () => (
   </svg>
 );
 
-const MessageFooter = ({ timestamp, contentToCopy }) => {
+const MessageFooter = ({ timestamp, contentToCopy, debug, onOpenDebug }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = (e) => {
@@ -74,12 +82,29 @@ const MessageFooter = ({ timestamp, contentToCopy }) => {
     }
   };
 
+  const handleDebugClick = (e) => {
+    e.stopPropagation();
+    if (onOpenDebug) {
+      onOpenDebug();
+    }
+  };
+
   const timeValue = timestamp ? new Date(timestamp) : new Date();
   const timeString = timeValue.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   return (
     <div className="chat-msg__footer">
       <span className="chat-msg__time">{timeString}</span>
+      {debug && (
+        <button
+          className="chat-msg__debug-btn"
+          onClick={handleDebugClick}
+          title="Inspect exact LLM Prompt & Response payload"
+        >
+          <CodeIcon />
+          <span>Debug</span>
+        </button>
+      )}
       {contentToCopy && (
         <button className="chat-msg__copy" onClick={handleCopy} title="Copy text">
           {copied ? <CheckIcon /> : <CopyIcon />}
@@ -90,10 +115,11 @@ const MessageFooter = ({ timestamp, contentToCopy }) => {
 };
 
 /**
- * ChatMessage — Renders a single chat message bubble with Notion minimalism.
+ * ChatMessage — Renders a single chat message bubble with Notion minimalism and LLM payload debugging.
  */
 export default function ChatMessage({ message, isActive }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isDebugOpen, setIsDebugOpen] = useState(false);
 
   useEffect(() => {
     if (message.collapsed) {
@@ -102,164 +128,210 @@ export default function ChatMessage({ message, isActive }) {
   }, [message.collapsed]);
 
   const toggleExpand = () => setIsExpanded(prev => !prev);
+  const openDebug = () => setIsDebugOpen(true);
 
-  // User message
-  if (message.role === 'user' || message.type === 'user') {
-    return (
-      <div className="chat-msg chat-msg--user">
-        <div className="chat-msg__box chat-msg__box--user">
-          <div className="chat-msg__content">{message.content}</div>
+  const renderBubble = () => {
+    // User message
+    if (message.role === 'user' || message.type === 'user') {
+      return (
+        <div className="chat-msg chat-msg--user">
+          <div className="chat-msg__box chat-msg__box--user">
+            <div className="chat-msg__content">{message.content}</div>
+          </div>
+          <MessageFooter
+            timestamp={message.timestamp}
+            contentToCopy={message.content}
+            debug={message.debug}
+            onOpenDebug={openDebug}
+          />
         </div>
-        <MessageFooter timestamp={message.timestamp} contentToCopy={message.content} />
-      </div>
-    );
-  }
-
-  // Status message
-  if (message.type === 'status') {
-    return <div className="chat-msg chat-msg--status">{message.content}</div>;
-  }
-
-  // Tool call
-  if (message.type === 'tool_call') {
-    const isRunning = isActive && !message.collapsed;
-    const argsStr = message.arguments
-      ? (typeof message.arguments === 'string' ? message.arguments : JSON.stringify(message.arguments, null, 2))
-      : '';
-
-    // Extract file targets for friendly display
-    let fileList = [];
-    if (message.name === 'write_files') {
-      if (Array.isArray(message.arguments)) {
-        fileList = message.arguments.map(f => f?.file_path).filter(Boolean);
-      } else if (message.arguments?.files && Array.isArray(message.arguments.files)) {
-        fileList = message.arguments.files.map(f => f?.file_path).filter(Boolean);
-      }
-    } else if ((message.name === 'write_file' || message.name === 'read_file' || message.name === 'edit_file') && message.arguments?.file_path) {
-      fileList = [message.arguments.file_path];
+      );
     }
 
-    return (
-      <div className="chat-msg chat-msg--tool_call">
-        <div className="chat-msg__assistant-row">
-          <div className="chat-msg__assistant-icon">
-            <AgentIcon />
-          </div>
-          <div className="chat-msg__content" style={{ flex: 1, minWidth: 0 }}>
-            <div className="chat-msg__box">
-              <div className="chat-msg__header" onClick={toggleExpand} style={{ cursor: 'pointer' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <ToolIcon />
-                  <span>{message.name}</span>
-                  {fileList.length > 0 && (
-                    <div className="chat-msg__file-badges">
-                      {fileList.map((fp, i) => (
-                        <span key={i} className="chat-msg__file-badge">
-                          <FileIcon /> {fp}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+    // Status message
+    if (message.type === 'status') {
+      return <div className="chat-msg chat-msg--status">{message.content}</div>;
+    }
+
+    // Tool call
+    if (message.type === 'tool_call') {
+      const isRunning = isActive && !message.collapsed;
+      const argsStr = message.arguments
+        ? (typeof message.arguments === 'string' ? message.arguments : JSON.stringify(message.arguments, null, 2))
+        : '';
+
+      // Extract file targets for friendly display
+      let fileList = [];
+      if (message.name === 'write_files') {
+        if (Array.isArray(message.arguments)) {
+          fileList = message.arguments.map(f => f?.file_path).filter(Boolean);
+        } else if (message.arguments?.files && Array.isArray(message.arguments.files)) {
+          fileList = message.arguments.files.map(f => f?.file_path).filter(Boolean);
+        }
+      } else if ((message.name === 'write_file' || message.name === 'read_file' || message.name === 'edit_file') && message.arguments?.file_path) {
+        fileList = [message.arguments.file_path];
+      }
+
+      return (
+        <div className="chat-msg chat-msg--tool_call">
+          <div className="chat-msg__assistant-row">
+            <div className="chat-msg__assistant-icon">
+              <AgentIcon />
+            </div>
+            <div className="chat-msg__content" style={{ flex: 1, minWidth: 0 }}>
+              <div className="chat-msg__box">
+                <div className="chat-msg__header" onClick={toggleExpand} style={{ cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <ToolIcon />
+                    <span>{message.name}</span>
+                    {fileList.length > 0 && (
+                      <div className="chat-msg__file-badges">
+                        {fileList.map((fp, i) => (
+                          <span key={i} className="chat-msg__file-badge">
+                            <FileIcon /> {fp}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <span style={{ display: 'flex', alignItems: 'center' }}>
+                    {isRunning ? <LoaderIcon /> : <ChevronIcon expanded={isExpanded} />}
+                  </span>
                 </div>
-                <span style={{ display: 'flex', alignItems: 'center' }}>
-                  {isRunning ? <LoaderIcon /> : <ChevronIcon expanded={isExpanded} />}
-                </span>
+                {isExpanded && argsStr && <pre className="chat-msg__details">{argsStr}</pre>}
               </div>
-              {isExpanded && argsStr && <pre className="chat-msg__details">{argsStr}</pre>}
             </div>
           </div>
+          <MessageFooter
+            timestamp={message.timestamp}
+            contentToCopy={argsStr}
+            debug={message.debug}
+            onOpenDebug={openDebug}
+          />
         </div>
-        <MessageFooter timestamp={message.timestamp} contentToCopy={argsStr} />
-      </div>
-    );
-  }
+      );
+    }
 
-  // Tool result
-  if (message.type === 'tool_result') {
-    const resultStr = typeof message.result === 'string' ? message.result : JSON.stringify(message.result, null, 2);
-    return (
-      <div className="chat-msg chat-msg--tool_result">
-        <div className="chat-msg__assistant-row">
-          <div className="chat-msg__assistant-icon">
-            <AgentIcon />
-          </div>
-          <div className="chat-msg__content" style={{ flex: 1, minWidth: 0 }}>
-            <div className="chat-msg__box">
-              <div className="chat-msg__header" onClick={toggleExpand} style={{ cursor: 'pointer' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <CheckIcon /> {message.name}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center' }}>
-                  <ChevronIcon expanded={isExpanded} />
-                </span>
-              </div>
-              {isExpanded && resultStr && <pre className="chat-msg__details">{resultStr}</pre>}
+    // Tool result
+    if (message.type === 'tool_result') {
+      const resultStr = typeof message.result === 'string' ? message.result : JSON.stringify(message.result, null, 2);
+      return (
+        <div className="chat-msg chat-msg--tool_result">
+          <div className="chat-msg__assistant-row">
+            <div className="chat-msg__assistant-icon">
+              <AgentIcon />
             </div>
-          </div>
-        </div>
-        <MessageFooter timestamp={message.timestamp} contentToCopy={resultStr} />
-      </div>
-    );
-  }
-
-  // Assistant response / token
-  if (message.type === 'token') {
-    return (
-      <div className="chat-msg chat-msg--assistant">
-        <div className="chat-msg__assistant-row">
-          <div className="chat-msg__assistant-icon">
-            <AgentIcon />
-          </div>
-          <div className="chat-msg__content">{message.content}</div>
-        </div>
-        <MessageFooter timestamp={message.timestamp} contentToCopy={message.content} />
-      </div>
-    );
-  }
-
-  // Thinking content
-  if (message.type === 'thinking') {
-    const isThinking = isActive && !message.collapsed;
-    return (
-      <div className="chat-msg chat-msg--thinking">
-        <div className="chat-msg__assistant-row">
-          <div className="chat-msg__assistant-icon">
-            <AgentIcon />
-          </div>
-          <div className="chat-msg__content" style={{ flex: 1, minWidth: 0 }}>
-            <div className="chat-msg__box chat-msg__box--thinking">
-              <div className="chat-msg__header" onClick={toggleExpand} style={{ cursor: 'pointer' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {isThinking ? 'Thinking...' : 'Thought'}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center' }}>
-                  {isThinking ? <LoaderIcon /> : <ChevronIcon expanded={isExpanded} />}
-                </span>
-              </div>
-              {(isExpanded || isThinking) && (
-                <div className="chat-msg__thinking-content">
-                  {message.content}
+            <div className="chat-msg__content" style={{ flex: 1, minWidth: 0 }}>
+              <div className="chat-msg__box">
+                <div className="chat-msg__header" onClick={toggleExpand} style={{ cursor: 'pointer' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <CheckIcon /> {message.name}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center' }}>
+                    <ChevronIcon expanded={isExpanded} />
+                  </span>
                 </div>
-              )}
+                {isExpanded && resultStr && <pre className="chat-msg__details">{resultStr}</pre>}
+              </div>
             </div>
           </div>
+          <MessageFooter
+            timestamp={message.timestamp}
+            contentToCopy={resultStr}
+            debug={message.debug}
+            onOpenDebug={openDebug}
+          />
         </div>
-        <MessageFooter timestamp={message.timestamp} contentToCopy={message.content} />
-      </div>
-    );
-  }
+      );
+    }
 
-  // Fallback for untyped content if it exists
-  if (message.content) {
-    return (
-      <div className="chat-msg chat-msg--user">
-        <div className="chat-msg__box chat-msg__box--user">
-          <div className="chat-msg__content">{message.content}</div>
+    // Assistant response / token
+    if (message.type === 'token') {
+      return (
+        <div className="chat-msg chat-msg--assistant">
+          <div className="chat-msg__assistant-row">
+            <div className="chat-msg__assistant-icon">
+              <AgentIcon />
+            </div>
+            <div className="chat-msg__content">{message.content}</div>
+          </div>
+          <MessageFooter
+            timestamp={message.timestamp}
+            contentToCopy={message.content}
+            debug={message.debug}
+            onOpenDebug={openDebug}
+          />
         </div>
-        <MessageFooter timestamp={message.timestamp} contentToCopy={message.content} />
-      </div>
-    );
-  }
+      );
+    }
 
-  return null;
+    // Thinking content
+    if (message.type === 'thinking') {
+      const isThinking = isActive && !message.collapsed;
+      return (
+        <div className="chat-msg chat-msg--thinking">
+          <div className="chat-msg__assistant-row">
+            <div className="chat-msg__assistant-icon">
+              <AgentIcon />
+            </div>
+            <div className="chat-msg__content" style={{ flex: 1, minWidth: 0 }}>
+              <div className="chat-msg__box chat-msg__box--thinking">
+                <div className="chat-msg__header" onClick={toggleExpand} style={{ cursor: 'pointer' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {isThinking ? 'Thinking...' : 'Thought'}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center' }}>
+                    {isThinking ? <LoaderIcon /> : <ChevronIcon expanded={isExpanded} />}
+                  </span>
+                </div>
+                {(isExpanded || isThinking) && (
+                  <div className="chat-msg__thinking-content">
+                    {message.content}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          <MessageFooter
+            timestamp={message.timestamp}
+            contentToCopy={message.content}
+            debug={message.debug}
+            onOpenDebug={openDebug}
+          />
+        </div>
+      );
+    }
+
+    // Fallback for untyped content if it exists
+    if (message.content) {
+      return (
+        <div className="chat-msg chat-msg--user">
+          <div className="chat-msg__box chat-msg__box--user">
+            <div className="chat-msg__content">{message.content}</div>
+          </div>
+          <MessageFooter
+            timestamp={message.timestamp}
+            contentToCopy={message.content}
+            debug={message.debug}
+            onOpenDebug={openDebug}
+          />
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  return (
+    <>
+      {renderBubble()}
+      {message.debug && (
+        <LlmDebugModal
+          isOpen={isDebugOpen}
+          onClose={() => setIsDebugOpen(false)}
+          debugData={message.debug}
+        />
+      )}
+    </>
+  );
 }
