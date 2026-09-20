@@ -1,12 +1,27 @@
 import { useState, useEffect, useRef } from 'react';
 import WelcomeView from './components/WelcomeView';
 import WorkspaceView from './components/WorkspaceView';
+import { normalizeSubagentName, isSubagentTool } from './components/subagentUtils';
 import { API_BASE_URL, WS_BASE_URL } from './config';
 import './index.css';
 
 function App() {
-  const [currentView, setCurrentView] = useState('welcome'); // 'welcome' | 'workspace'
-  const [activeProject, setActiveProject] = useState(null);
+  const [activeProject, setActiveProject] = useState(() => {
+    try {
+      const saved = localStorage.getItem('lowkey_active_project');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [currentView, setCurrentView] = useState(() => {
+    try {
+      const saved = localStorage.getItem('lowkey_active_project');
+      return saved ? 'workspace' : 'welcome';
+    } catch {
+      return 'welcome';
+    }
+  });
 
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -15,12 +30,13 @@ function App() {
   const [pendingApproval, setPendingApproval] = useState(null);
   const [previewData, setPreviewData] = useState(null);
   const [lastChangeTimestamp, setLastChangeTimestamp] = useState(0);
+  const [contextTelemetry, setContextTelemetry] = useState(null);
 
   // Hardware & Model States
   const [hardwareInfo, setHardwareInfo] = useState(null);
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState(
-    () => localStorage.getItem('lowkey_selected_model') || 'qwen2.5-coder:7b'
+    () => localStorage.getItem('lowkey_selected_model') || 'qwen2.5-coder:14b'
   );
 
   const wsRef = useRef(null);
@@ -58,6 +74,14 @@ function App() {
   const handleSelectModel = (modelId) => {
     setSelectedModel(modelId);
     localStorage.setItem('lowkey_selected_model', modelId);
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({
+          action: 'set_model',
+          model: modelId,
+        })
+      );
+    }
   };
 
   useEffect(() => {
@@ -66,7 +90,37 @@ function App() {
     // Initialize WebSocket connection
     wsRef.current = new WebSocket(WS_BASE_URL);
 
-    wsRef.current.onopen = () => setIsConnected(true);
+    wsRef.current.onopen = () => {
+      setIsConnected(true);
+      // Auto-rehydrate saved active project across browser restarts
+      try {
+        const saved = localStorage.getItem('lowkey_active_project');
+        if (saved) {
+          const projectObj = JSON.parse(saved);
+          if (projectObj && projectObj.name) {
+            wsRef.current.send(
+              JSON.stringify({
+                action: 'open_project',
+                name: projectObj.name,
+              })
+            );
+          }
+        }
+      } catch (err) {
+        console.error('Failed to auto-open active project on reconnect:', err);
+      }
+      try {
+        const savedModel = localStorage.getItem('lowkey_selected_model');
+        if (savedModel && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(
+            JSON.stringify({
+              action: 'set_model',
+              model: savedModel,
+            })
+          );
+        }
+      } catch {}
+    };
     wsRef.current.onclose = () => {
       setIsConnected(false);
       setIsAgentRunning(false);
@@ -80,6 +134,25 @@ function App() {
       try {
         const data = JSON.parse(event.data);
         const timestamp = new Date().toISOString();
+
+        // Handle error responses
+        if (data.type === 'error') {
+          console.error('WebSocket error:', data.content);
+          if (data.content && data.content.toLowerCase().includes('not found')) {
+            try {
+              localStorage.removeItem('lowkey_active_project');
+            } catch {}
+            setActiveProject(null);
+            setCurrentView('welcome');
+          }
+          return;
+        }
+
+        // Handle Real-Time Context Telemetry Events (CP-106)
+        if (data.type === 'context_telemetry' && data.telemetry) {
+          setContextTelemetry(data.telemetry);
+          return;
+        }
 
         // Handle Command Approval Request
         if (data.type === 'command_approval_request') {
@@ -109,6 +182,14 @@ function App() {
         }
 
         if (data.type === 'project_opened') {
+          if (data.project) {
+            setActiveProject(data.project);
+            try {
+              localStorage.setItem('lowkey_active_project', JSON.stringify(data.project));
+            } catch (e) {
+              console.error('Failed to persist active project:', e);
+            }
+          }
           if (data.project && data.project.port) {
             setPreviewData({
               port: data.project.port,
@@ -117,6 +198,7 @@ function App() {
           } else {
             setPreviewData(null);
           }
+          return;
         }
 
         // Handle Rehydrating Persistent Chat History from Backend
@@ -135,13 +217,14 @@ function App() {
             if (loaded.length === 0) {
               return prev;
             }
-            // Preserve any in-flight active messages in prev that aren't in the loaded history yet
+            // Preserve any in-flight active user prompt in prev that isn't in the loaded history yet
             const activeInFlight = prev.filter(
               (pMsg) =>
+                (pMsg.role === 'user' || pMsg.type === 'user') &&
                 !loaded.some(
                   (lMsg) =>
                     lMsg.content === pMsg.content &&
-                    (lMsg.role === pMsg.role || lMsg.type === pMsg.type)
+                    (lMsg.role === 'user' || lMsg.type === 'user')
                 )
             );
             return [...collapsed, ...activeInFlight];
@@ -150,7 +233,6 @@ function App() {
         }
 
         // Handle Real-Time LLM Debug Inspection Payload
-
         if (data.type === 'llm_debug' && data.debug) {
           setMessages((prev) => {
             if (prev.length === 0) return prev;
@@ -166,6 +248,55 @@ function App() {
               updated[lastIdx] = { ...updated[lastIdx], debug: data.debug };
             }
             return updated;
+          });
+          return;
+        }
+
+        // Handle Real-Time Subagent Telemetry Events
+        if (data.type === 'subagent_event') {
+          const normName = normalizeSubagentName(data.subagent);
+          setMessages((prev) => {
+            const updated = [...prev];
+            for (let i = updated.length - 1; i >= 0; i--) {
+              if (
+                updated[i].type === 'tool_call' &&
+                normalizeSubagentName(updated[i].name) === normName
+              ) {
+                const existingEvents = updated[i].subagentEvents || [];
+                updated[i] = {
+                  ...updated[i],
+                  subagentEvents: [...existingEvents, { ...data, timestamp }],
+                  subagentStatus: data.event === 'finish' ? 'completed' : 'running',
+                };
+                return updated;
+              }
+            }
+            return updated;
+          });
+          return;
+        }
+
+        // Handle Subagent Tool Result correlation
+        if (data.type === 'tool_result' && isSubagentTool(data.name)) {
+          const normName = normalizeSubagentName(data.name);
+          setMessages((prev) => {
+            const updated = [...prev];
+            for (let i = updated.length - 1; i >= 0; i--) {
+              if (
+                updated[i].type === 'tool_call' &&
+                normalizeSubagentName(updated[i].name) === normName
+              ) {
+                updated[i] = {
+                  ...updated[i],
+                  subagentStatus: 'completed',
+                  subagentEvents: data.subagentEvents || updated[i].subagentEvents || [],
+                  subagentMetrics: data.subagentMetrics || updated[i].subagentMetrics || {},
+                  result: data.result,
+                };
+                break;
+              }
+            }
+            return [...updated, { ...data, timestamp }];
           });
           return;
         }
@@ -250,8 +381,13 @@ function App() {
   const handleOpenProject = (projectInfo) => {
     setActiveProject(projectInfo);
     setCurrentView('workspace');
+    try {
+      localStorage.setItem('lowkey_active_project', JSON.stringify(projectInfo));
+    } catch (e) {
+      console.error('Failed to persist active project:', e);
+    }
 
-    if (wsRef.current && isConnected) {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(
         JSON.stringify({
           action: 'open_project',
@@ -293,8 +429,13 @@ function App() {
     setActiveProject(null);
     setPreviewData(null);
     setMessages([]);
+    try {
+      localStorage.removeItem('lowkey_active_project');
+    } catch (e) {
+      console.error('Failed to clear active project:', e);
+    }
     // Instruct backend to close active project
-    if (wsRef.current && isConnected) {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(
         JSON.stringify({
           action: 'close_project',
@@ -336,6 +477,13 @@ function App() {
     setPreviewData(null);
   };
 
+  const handleStopAgent = () => {
+    if (wsRef.current && isConnected) {
+      wsRef.current.send(JSON.stringify({ action: 'stop_agent' }));
+    }
+    setIsAgentRunning(false);
+  };
+
   return (
     <div className="app-container">
       {currentView === 'welcome' && (
@@ -370,6 +518,8 @@ function App() {
           selectedModel={selectedModel}
           onSelectModel={handleSelectModel}
           onRefreshModels={fetchModelsAndHardware}
+          contextTelemetry={contextTelemetry}
+          onStopAgent={handleStopAgent}
         />
       )}
     </div>

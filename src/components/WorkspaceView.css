@@ -48,6 +48,14 @@
   flex: 1;
 }
 
+.workspace-header__right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex: 1;
+}
+
 .workspace-header__model-container {
   display: flex;
   align-items: center;

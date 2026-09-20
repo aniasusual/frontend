@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import ChatPanel from './ChatPanel';
 import PreviewPanel from './PreviewPanel';
 import ModelSelector from './ModelSelector';
+import ContextGauge from './ContextGauge';
 import './WorkspaceView.css';
 
 export default function WorkspaceView({
@@ -22,19 +23,16 @@ export default function WorkspaceView({
   selectedModel,
   onSelectModel,
   onRefreshModels,
+  contextTelemetry,
+  onStopAgent,
 }) {
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
   const isDragging = useRef(false);
   const leftPanelRef = useRef(null);
   const rightPanelRef = useRef(null);
 
-  const currentModelObj = models.find((m) => m.id === selectedModel) || {
-    name: selectedModel || 'qwen2.5-coder:7b',
-    compatibility_badge: '⚡ Optimal',
-    compatibility: 'optimal',
-  };
 
-  const handleMouseDown = useCallback((e) => {
+  const handleMouseDown = useCallback((_e) => {
     isDragging.current = true;
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
@@ -88,9 +86,10 @@ export default function WorkspaceView({
           ← Back to Projects
         </button>
         <div className="workspace-header__title">{projectName || 'Workspace'}</div>
-        <div className="workspace-header__spacer" />
+        <div className="workspace-header__right">
+          <ContextGauge telemetry={contextTelemetry} placement="bottom" />
+        </div>
       </div>
-
 
       <div className="workspace">
         <div className="workspace__left" ref={leftPanelRef} style={{ width: '400px' }}>
@@ -107,6 +106,8 @@ export default function WorkspaceView({
             hardwareInfo={hardwareInfo}
             onSelectModel={onSelectModel}
             onRefreshModels={onRefreshModels}
+            contextTelemetry={contextTelemetry}
+            onStopAgent={onStopAgent}
           />
         </div>
 

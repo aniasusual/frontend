@@ -324,6 +324,57 @@ export default function LlmDebugModal({ isOpen, onClose, debugData }) {
         </div>
 
         <div className="llm-debug-body">
+          {parsedData?.context_telemetry && (
+            <div className="llm-debug-telemetry-banner">
+              <div className="llm-debug-telemetry-stat">
+                <span className="stat-label">Total Tokens</span>
+                <span className="stat-value">
+                  {parsedData.context_telemetry.total_tokens?.toLocaleString()} / {parsedData.context_telemetry.context_window?.toLocaleString()} ({parsedData.context_telemetry.usage_pct}%)
+                </span>
+              </div>
+              <div className="llm-debug-telemetry-stat">
+                <span className="stat-label">Virtual RAM</span>
+                <span className="stat-value">
+                  {parsedData.context_telemetry.virtual_ram_tokens?.toLocaleString()} tokens ({parsedData.context_telemetry.virtual_ram_files || 0} files)
+                </span>
+              </div>
+              <div className="llm-debug-telemetry-stat">
+                <span className="stat-label">Static Layer</span>
+                <span className="stat-value">
+                  {parsedData.context_telemetry.static_tokens?.toLocaleString()} tokens
+                </span>
+              </div>
+              <div className="llm-debug-telemetry-stat">
+                <span className="stat-label">Ephemeral Turns</span>
+                <span className="stat-value">
+                  {parsedData.context_telemetry.ephemeral_tokens?.toLocaleString() || 0} tokens
+                </span>
+              </div>
+              <div className="llm-debug-telemetry-stat">
+                <span className="stat-label">Context Health</span>
+                <div className="llm-debug-telemetry-health-row">
+                  <span className={`stat-status stat-status--${parsedData.context_telemetry.status || 'normal'}`}>
+                    {parsedData.context_telemetry.status || 'normal'}
+                  </span>
+                  {parsedData.context_telemetry.evicted && (
+                    <span className="stat-badge stat-badge--evicted" title="Historical logs pruned due to token budget caps">
+                      Evicted
+                    </span>
+                  )}
+                  {parsedData.context_telemetry.squashed && (
+                    <span className="stat-badge stat-badge--squashed" title="In-loop tool output middle truncation active">
+                      Squashed
+                    </span>
+                  )}
+                  {parsedData.context_telemetry.rolled_up && (
+                    <span className="stat-badge stat-badge--rolled-up" title="Collapsed intermediate resolved failure loops">
+                      Rolled Up
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           <div className="json-tree-container">
             {typeof parsedData === 'object' && parsedData !== null ? (
               <JsonTreeNode
@@ -337,6 +388,7 @@ export default function LlmDebugModal({ isOpen, onClose, debugData }) {
             )}
           </div>
         </div>
+
       </div>
     </div>
   );

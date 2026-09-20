@@ -46,8 +46,7 @@ export default function ModelSelector({
     return true;
   });
 
-  const handleSelect = (modelId, canRun) => {
-    if (!canRun) return;
+  const handleSelect = (modelId) => {
     onSelectModel(modelId);
     onClose();
   };
@@ -136,7 +135,7 @@ export default function ModelSelector({
         if (nextInstalled) {
           onSelectModel(nextInstalled.id);
         } else {
-          onSelectModel('qwen2.5-coder:7b');
+          onSelectModel('qwen2.5-coder:14b');
         }
       }
     } catch (err) {
@@ -186,7 +185,7 @@ export default function ModelSelector({
           <input
             type="text"
             className="notion-modal__search-input"
-            placeholder="Search models (e.g. qwen, 14b, llama, mistral, reasoning)..."
+            placeholder="Search models (e.g. qwen, deepseek, 14b, 30b)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             autoFocus
@@ -252,9 +251,9 @@ export default function ModelSelector({
                 <div
                   key={model.id}
                   className={`notion-model-row ${isSelected ? 'notion-model-row--selected' : ''} ${
-                    !model.can_run ? 'notion-model-row--disabled' : ''
+                    !model.can_run && !model.installed ? 'notion-model-row--heavy' : ''
                   }`}
-                  onClick={() => model.installed && handleSelect(model.id, model.can_run)}
+                  onClick={() => model.installed && handleSelect(model.id)}
                 >
                   <div className="notion-model-row__main">
                     <div className="notion-model-row__title-group">
@@ -312,7 +311,7 @@ export default function ModelSelector({
                         ) : (
                           <button
                             className="notion-btn notion-btn--secondary"
-                            onClick={() => handleSelect(model.id, model.can_run)}
+                            onClick={() => handleSelect(model.id)}
                           >
                             Select
                           </button>
@@ -359,15 +358,14 @@ export default function ModelSelector({
                       <>
                         {isDownloading ? (
                           <span className="notion-model-row__downloading-text">Downloading...</span>
-                        ) : model.can_run ? (
+                        ) : (
                           <button
                             className="notion-btn notion-btn--secondary"
                             onClick={(e) => handlePullModel(e, model.id)}
+                            title={!model.can_run ? `Requires ${model.required_ram_gb} GB RAM (may utilize swap memory on this machine)` : undefined}
                           >
                             Download
                           </button>
-                        ) : (
-                          <span className="notion-model-row__unsupported-text">Unsupported</span>
                         )}
                       </>
                     )}

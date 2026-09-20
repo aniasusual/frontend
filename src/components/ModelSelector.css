@@ -258,6 +258,10 @@
   cursor: default;
 }
 
+.notion-model-row--heavy {
+  border-left: 2px solid rgba(234, 179, 8, 0.4);
+}
+
 .notion-model-row__main {
   flex: 1;
   min-width: 0;

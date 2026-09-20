@@ -195,6 +195,7 @@
 
 .chat-panel__input:disabled {
   opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* Bottom footer of input card containing model selector on left and send button on right */
@@ -205,6 +206,15 @@
   padding-top: 6px;
   border-top: 1px solid rgba(255, 255, 255, 0.04);
   margin-top: 4px;
+}
+
+.chat-panel__input-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  overflow: visible;
 }
 
 .chat-panel__model-pill {
@@ -220,7 +230,8 @@
   cursor: pointer;
   transition: all 0.12s ease;
   outline: none;
-  max-width: 220px;
+  max-width: 140px;
+  flex-shrink: 1;
 }
 
 .chat-panel__model-pill:hover {
@@ -260,4 +271,31 @@
   background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.2);
   cursor: not-allowed;
+}
+
+/* Stop button when agent is actively generating */
+.chat-panel__send--stop {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #f87171;
+  cursor: pointer;
+  opacity: 1;
+  animation: stop-btn-pulse 2s infinite ease-in-out;
+}
+
+.chat-panel__send--stop:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #ffffff;
+  transform: scale(1.05);
+  animation: none;
+}
+
+@keyframes stop-btn-pulse {
+  0%, 100% {
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+  50% {
+    border-color: rgba(239, 68, 68, 0.65);
+  }
 }

@@ -105,6 +105,99 @@
   background: #121212;
 }
 
+/* Notion-Style Telemetry Summary Banner in Debug Modal */
+.llm-debug-telemetry-banner {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+.llm-debug-telemetry-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.llm-debug-telemetry-stat .stat-label {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.llm-debug-telemetry-stat .stat-value {
+  color: #f4f4f5;
+  font-weight: 500;
+}
+
+.llm-debug-telemetry-stat .stat-status {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.llm-debug-telemetry-stat .stat-status--normal {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.llm-debug-telemetry-stat .stat-status--warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.llm-debug-telemetry-stat .stat-status--critical {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+.llm-debug-telemetry-health-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.llm-debug-telemetry-stat .stat-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  width: fit-content;
+}
+
+.llm-debug-telemetry-stat .stat-badge--evicted {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.llm-debug-telemetry-stat .stat-badge--squashed {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fde68a;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.llm-debug-telemetry-stat .stat-badge--rolled-up {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
 /* Collapsible JSON Tree Styles */
 .json-tree-container {
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);

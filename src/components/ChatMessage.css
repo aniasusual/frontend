@@ -244,3 +244,17 @@
   border-color: rgba(59, 130, 246, 0.35);
   color: #93c5fd;
 }
+
+/* Subagent cards in main chat */
+.chat-msg--subagent-card .chat-msg__box,
+.chat-msg--subagent-result .chat-msg__box {
+  background: #202020;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.chat-msg--subagent-card .chat-msg__box:hover,
+.chat-msg--subagent-result .chat-msg__box:hover {
+  background: #242424;
+  border-color: rgba(255, 255, 255, 0.16);
+}

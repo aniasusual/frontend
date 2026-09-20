@@ -2,12 +2,21 @@ import { useState, useEffect, useRef } from 'react';
 import ChatMessage from './ChatMessage';
 import CommandApproval from './CommandApproval';
 import ModelSelector from './ModelSelector';
+import SubagentPanel from './SubagentPanel';
+import ContextGauge from './ContextGauge';
+import { getSubagentSessionData } from './subagentUtils';
 import './ChatPanel.css';
 
 const SendIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="12" y1="19" x2="12" y2="5"></line>
     <polyline points="5 12 12 5 19 12"></polyline>
+  </svg>
+);
+
+const StopIcon = () => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="5" y="5" width="14" height="14" rx="2" ry="2"></rect>
   </svg>
 );
 
@@ -24,17 +33,44 @@ export default function ChatPanel({
   hardwareInfo,
   onSelectModel,
   onRefreshModels,
+  contextTelemetry,
+  onStopAgent,
 }) {
   const [input, setInput] = useState('');
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
+  const [selectedSubagentMsg, setSelectedSubagentMsg] = useState(null);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
   const isUserScrolledRef = useRef(false);
 
   const currentModelObj = models.find((m) => m.id === selectedModel) || {
-    name: selectedModel || 'qwen2.5-coder:7b',
+    name: selectedModel || 'qwen2.5-coder:14b',
     compatibility_label: 'Optimal',
   };
+
+  const handleOpenSubagent = (msg) => {
+    setSelectedSubagentMsg(msg);
+  };
+
+  const handleCloseSubagent = () => {
+    setSelectedSubagentMsg(null);
+  };
+
+  // Keep active subagent data reactive to incoming live websocket events
+  const activeSubagentData = selectedSubagentMsg
+    ? getSubagentSessionData(
+        messages?.find((m) => m === selectedSubagentMsg || (selectedSubagentMsg.timestamp && m.timestamp === selectedSubagentMsg.timestamp))
+        || messages?.slice().reverse().find(
+          (m) =>
+            (m.type === 'tool_call' || m.type === 'tool_result') &&
+            m.name &&
+            selectedSubagentMsg.name &&
+            (m.name === selectedSubagentMsg.name || m.name.includes(selectedSubagentMsg.name.replace('invoke_', '')))
+        )
+        || selectedSubagentMsg,
+        messages
+      ) || selectedSubagentMsg
+    : null;
 
   const handleScroll = () => {
     const container = scrollContainerRef.current;
@@ -55,7 +91,7 @@ export default function ChatPanel({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!input.trim() || !isConnected) return;
+    if (!input.trim() || !isConnected || isAgentRunning) return;
 
     onSendMessage(input);
     setInput('');
@@ -80,7 +116,7 @@ export default function ChatPanel({
     : -1;
   const messagesAfterUser = lastUserIndex >= 0 ? messages.slice(lastUserIndex + 1) : messages || [];
   const hasStreamingStarted = messagesAfterUser.some(
-    (m) => m.type === 'token' || m.type === 'thinking' || m.type === 'tool_call' || m.type === 'tool_result'
+    (m) => m.type === 'token' || m.type === 'thinking' || m.type === 'tool_call' || m.type === 'tool_result' || m.role === 'assistant'
   );
   const showLoader = isAgentRunning && !hasStreamingStarted;
 
@@ -103,6 +139,7 @@ export default function ChatPanel({
             key={i}
             message={msg}
             isActive={isAgentRunning && i === messages.length - 1}
+            onOpenSubagent={handleOpenSubagent}
           />
         ))}
 
@@ -164,42 +201,63 @@ export default function ChatPanel({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={isConnected ? 'Describe a change...' : 'Connecting...'}
-            disabled={!isConnected}
+            placeholder={
+              !isConnected
+                ? 'Connecting...'
+                : isAgentRunning
+                ? 'Agent is generating...'
+                : 'Describe a change...'
+            }
+            disabled={!isConnected || isAgentRunning}
           />
 
-          {/* Model Selector trigger positioned directly below the textarea */}
+          {/* Bottom footer containing Model Selector & Context Gauge chips on left, and send button on right */}
           <div className="chat-panel__input-footer">
-            <button
-              type="button"
-              className="chat-panel__model-pill"
-              onClick={() => setIsModelSelectorOpen(true)}
-              title="Change active model"
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
-                <rect x="9" y="9" width="6" height="6"></rect>
-                <line x1="9" y1="1" x2="9" y2="4"></line>
-                <line x1="15" y1="1" x2="15" y2="4"></line>
-                <line x1="9" y1="20" x2="9" y2="23"></line>
-                <line x1="15" y1="20" x2="15" y2="23"></line>
-              </svg>
-              <span className="chat-panel__model-name">
-                {currentModelObj.name || selectedModel}
-              </span>
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </button>
+            <div className="chat-panel__input-footer-left">
+              <button
+                type="button"
+                className="chat-panel__model-pill"
+                onClick={() => setIsModelSelectorOpen(true)}
+                title="Change active model"
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                  <rect x="9" y="9" width="6" height="6"></rect>
+                  <line x1="9" y1="1" x2="9" y2="4"></line>
+                  <line x1="15" y1="1" x2="15" y2="4"></line>
+                  <line x1="9" y1="20" x2="9" y2="23"></line>
+                  <line x1="15" y1="20" x2="15" y2="23"></line>
+                </svg>
+                <span className="chat-panel__model-name">
+                  {currentModelObj.name || selectedModel}
+                </span>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
 
-            <button
-              type="submit"
-              className="chat-panel__send"
-              disabled={!input.trim() || !isConnected}
-              title="Send message"
-            >
-              <SendIcon />
-            </button>
+              <ContextGauge telemetry={contextTelemetry} />
+            </div>
+
+            {isAgentRunning ? (
+              <button
+                type="button"
+                className="chat-panel__send chat-panel__send--stop"
+                onClick={onStopAgent}
+                title="Stop agent"
+              >
+                <StopIcon />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="chat-panel__send"
+                disabled={!input.trim() || !isConnected}
+                title="Send message"
+              >
+                <SendIcon />
+              </button>
+            )}
           </div>
         </div>
       </form>
@@ -214,6 +272,15 @@ export default function ChatPanel({
         models={models}
         onRefreshModels={onRefreshModels}
       />
+
+      {/* Subagent Activity Panel Overlay */}
+      {activeSubagentData && (
+        <SubagentPanel
+          subagent={activeSubagentData}
+          onClose={handleCloseSubagent}
+          isActive={isAgentRunning}
+        />
+      )}
     </div>
   );
 }

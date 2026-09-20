@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import LlmDebugModal from './LlmDebugModal';
+import { isSubagentTool, getSubagentDisplayName } from './subagentUtils';
 import './ChatMessage.css';
 
 const CopyIcon = () => (
@@ -55,6 +56,13 @@ const FileIcon = () => (
 const CheckIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="20 6 9 17 4 12"></polyline>
+  </svg>
+);
+
+const SearchIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8"></circle>
+    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
   </svg>
 );
 
@@ -117,7 +125,7 @@ const MessageFooter = ({ timestamp, contentToCopy, debug, onOpenDebug }) => {
 /**
  * ChatMessage — Renders a single chat message bubble with Notion minimalism and LLM payload debugging.
  */
-export default function ChatMessage({ message, isActive }) {
+export default function ChatMessage({ message, isActive, onOpenSubagent }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDebugOpen, setIsDebugOpen] = useState(false);
 
@@ -155,6 +163,7 @@ export default function ChatMessage({ message, isActive }) {
 
     // Tool call
     if (message.type === 'tool_call') {
+      const isSubagent = isSubagentTool(message.name);
       const isRunning = isActive && !message.collapsed;
       const argsStr = message.arguments
         ? (typeof message.arguments === 'string' ? message.arguments : JSON.stringify(message.arguments, null, 2))
@@ -172,18 +181,38 @@ export default function ChatMessage({ message, isActive }) {
         fileList = [message.arguments.file_path];
       }
 
+      const handleClick = (e) => {
+        if (isSubagent && onOpenSubagent) {
+          e?.stopPropagation?.();
+          onOpenSubagent(message);
+        } else {
+          toggleExpand();
+        }
+      };
+
+      const subagentLabel = isSubagent ? getSubagentDisplayName(message.name) : message.name;
+
       return (
-        <div className="chat-msg chat-msg--tool_call">
+        <div className={`chat-msg chat-msg--tool_call ${isSubagent ? 'chat-msg--subagent-card' : ''}`}>
           <div className="chat-msg__assistant-row">
             <div className="chat-msg__assistant-icon">
               <AgentIcon />
             </div>
             <div className="chat-msg__content" style={{ flex: 1, minWidth: 0 }}>
-              <div className="chat-msg__box">
-                <div className="chat-msg__header" onClick={toggleExpand} style={{ cursor: 'pointer' }}>
+              <div
+                className="chat-msg__box"
+                onClick={isSubagent ? handleClick : undefined}
+                style={isSubagent ? { cursor: 'pointer' } : undefined}
+              >
+                <div
+                  className="chat-msg__header"
+                  onClick={!isSubagent ? handleClick : undefined}
+                  style={{ cursor: 'pointer' }}
+                  title={isSubagent ? 'Click to open subagent panel' : undefined}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <ToolIcon />
-                    <span>{message.name}</span>
+                    <span style={{ fontWeight: isSubagent ? 500 : 400 }}>{subagentLabel}</span>
                     {fileList.length > 0 && (
                       <div className="chat-msg__file-badges">
                         {fileList.map((fp, i) => (
@@ -193,12 +222,21 @@ export default function ChatMessage({ message, isActive }) {
                         ))}
                       </div>
                     )}
+                    {message.name === 'search_web' && message.arguments?.query && (
+                      <div className="chat-msg__file-badges">
+                        <span className="chat-msg__file-badge">
+                          <SearchIcon /> {message.arguments.query}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <span style={{ display: 'flex', alignItems: 'center' }}>
-                    {isRunning ? <LoaderIcon /> : <ChevronIcon expanded={isExpanded} />}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ display: 'flex', alignItems: 'center' }}>
+                      {isRunning ? <LoaderIcon /> : <ChevronIcon expanded={isExpanded} />}
+                    </span>
+                  </div>
                 </div>
-                {isExpanded && argsStr && <pre className="chat-msg__details">{argsStr}</pre>}
+                {!isSubagent && isExpanded && argsStr && <pre className="chat-msg__details">{argsStr}</pre>}
               </div>
             </div>
           </div>
@@ -214,24 +252,50 @@ export default function ChatMessage({ message, isActive }) {
 
     // Tool result
     if (message.type === 'tool_result') {
+      const isSubagent = isSubagentTool(message.name);
       const resultStr = typeof message.result === 'string' ? message.result : JSON.stringify(message.result, null, 2);
+      const subagentLabel = isSubagent ? getSubagentDisplayName(message.name) : message.name;
+
+      const handleClick = (e) => {
+        if (isSubagent && onOpenSubagent) {
+          e?.stopPropagation?.();
+          onOpenSubagent(message);
+        } else {
+          toggleExpand();
+        }
+      };
+
       return (
-        <div className="chat-msg chat-msg--tool_result">
+        <div className={`chat-msg chat-msg--tool_result ${isSubagent ? 'chat-msg--subagent-result' : ''}`}>
           <div className="chat-msg__assistant-row">
             <div className="chat-msg__assistant-icon">
               <AgentIcon />
             </div>
             <div className="chat-msg__content" style={{ flex: 1, minWidth: 0 }}>
-              <div className="chat-msg__box">
-                <div className="chat-msg__header" onClick={toggleExpand} style={{ cursor: 'pointer' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <CheckIcon /> {message.name}
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center' }}>
-                    <ChevronIcon expanded={isExpanded} />
-                  </span>
+              <div
+                className="chat-msg__box"
+                onClick={isSubagent ? handleClick : undefined}
+                style={isSubagent ? { cursor: 'pointer' } : undefined}
+              >
+                <div
+                  className="chat-msg__header"
+                  onClick={!isSubagent ? handleClick : undefined}
+                  style={{ cursor: 'pointer' }}
+                  title={isSubagent ? 'Click to open subagent panel' : undefined}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <CheckIcon />
+                    <span style={{ fontWeight: isSubagent ? 500 : 400 }}>
+                      {isSubagent ? `${subagentLabel} Completed` : message.name}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ display: 'flex', alignItems: 'center' }}>
+                      <ChevronIcon expanded={isExpanded} />
+                    </span>
+                  </div>
                 </div>
-                {isExpanded && resultStr && <pre className="chat-msg__details">{resultStr}</pre>}
+                {!isSubagent && isExpanded && resultStr && <pre className="chat-msg__details">{resultStr}</pre>}
               </div>
             </div>
           </div>
@@ -246,7 +310,7 @@ export default function ChatMessage({ message, isActive }) {
     }
 
     // Assistant response / token
-    if (message.type === 'token') {
+    if (message.type === 'token' || message.role === 'assistant' || message.type === 'assistant') {
       return (
         <div className="chat-msg chat-msg--assistant">
           <div className="chat-msg__assistant-row">
