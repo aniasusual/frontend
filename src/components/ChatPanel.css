@@ -89,11 +89,19 @@
   transition: background 0.25s ease, color 0.25s ease;
 }
 
+.chat-panel__agent-status--generating,
 .chat-panel__agent-status--running {
   background: linear-gradient(to right, rgba(139, 92, 246, 0.3) 0%, rgba(59, 130, 246, 0.12) 50%, transparent 100%);
   color: #ede9fe;
 }
 
+.chat-panel__agent-status--awaiting,
+.chat-panel__agent-status--awaiting_human {
+  background: linear-gradient(to right, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.1) 50%, transparent 100%);
+  color: #fde68a;
+}
+
+.chat-panel__agent-status--done,
 .chat-panel__agent-status--idle {
   background: linear-gradient(to right, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.08) 50%, transparent 100%);
   color: #a7f3d0;

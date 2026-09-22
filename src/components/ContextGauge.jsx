@@ -123,6 +123,16 @@ export default function ContextGauge({ telemetry, placement = 'top' }) {
               </span>
             </div>
 
+            {telemetry?.virtual_ram_files_list && telemetry.virtual_ram_files_list.length > 0 && (
+              <div className="context-gauge__ram-files">
+                {telemetry.virtual_ram_files_list.map((filePath) => (
+                  <span key={filePath} className="context-gauge__ram-file-chip" title={filePath}>
+                    {filePath.split('/').pop()}
+                  </span>
+                ))}
+              </div>
+            )}
+
             <div className="context-gauge__row">
               <span className="context-gauge__row-key">
                 Ephemeral Turns

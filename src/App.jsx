@@ -26,7 +26,9 @@ function App() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [messages, setMessages] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [isAgentRunning, setIsAgentRunning] = useState(false);
+  const [agentStatus, setAgentStatus] = useState(null); // 'generating' | 'awaiting_human' | 'done' | null
+  const isAgentRunning = agentStatus === 'generating';
+  const isAwaitingHuman = agentStatus === 'awaiting_human';
   const [pendingApproval, setPendingApproval] = useState(null);
   const [previewData, setPreviewData] = useState(null);
   const [lastChangeTimestamp, setLastChangeTimestamp] = useState(0);
@@ -123,17 +125,31 @@ function App() {
     };
     wsRef.current.onclose = () => {
       setIsConnected(false);
-      setIsAgentRunning(false);
+      setAgentStatus(null);
     };
     wsRef.current.onerror = () => {
       setIsConnected(false);
-      setIsAgentRunning(false);
+      setAgentStatus(null);
     };
 
     wsRef.current.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data);
+        if (!event || !event.data) return;
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (!data || typeof data !== 'object') return;
         const timestamp = new Date().toISOString();
+        // Self-heal running status when active execution events stream in
+        if (
+          (data.type === 'status' && data.content === 'Running') ||
+          data.type === 'token' ||
+          data.type === 'thinking' ||
+          data.type === 'tool_call' ||
+          data.type === 'tool_result' ||
+          data.type === 'subagent_event' ||
+          data.event === 'subagent_event'
+        ) {
+          setAgentStatus((prev) => (prev !== 'awaiting_human' ? 'generating' : prev));
+        }
 
         // Handle error responses
         if (data.type === 'error') {
@@ -151,6 +167,19 @@ function App() {
         // Handle Real-Time Context Telemetry Events (CP-106)
         if (data.type === 'context_telemetry' && data.telemetry) {
           setContextTelemetry(data.telemetry);
+          return;
+        }
+        // Handle Ask Human Question Event
+        if (data.type === 'ask_human') {
+          setAgentStatus('awaiting_human');
+          setMessages((prev) => {
+            const collapsedPrev = prev.map((msg) =>
+              msg.type === 'tool_call' || msg.type === 'tool_result' || msg.type === 'thinking'
+                ? { ...msg, collapsed: true }
+                : msg
+            );
+            return [...collapsedPrev, { ...data, timestamp }];
+          });
           return;
         }
 
@@ -204,12 +233,26 @@ function App() {
         // Handle Rehydrating Persistent Chat History from Backend
         if (data.type === 'chat_history_loaded') {
           const loaded = Array.isArray(data.messages) ? data.messages : [];
-          // Ensure past tool executions and thoughts start collapsed
-          const collapsed = loaded.map((m) =>
-            m.type === 'tool_call' || m.type === 'tool_result' || m.type === 'thinking'
-              ? { ...m, collapsed: true }
-              : m
+          const lastMsg = loaded[loaded.length - 1];
+          const lastWasAsk = Boolean(
+            lastMsg &&
+              (lastMsg.type === 'ask_human' ||
+                (lastMsg.type === 'tool_call' && lastMsg.name === 'ask_human') ||
+                lastMsg.content === 'AwaitingHuman')
           );
+          const lastWasDone = Boolean(
+            lastMsg &&
+              (lastMsg.content === 'Done' || (lastMsg.type === 'tool_call' && lastMsg.name === 'finish'))
+          );
+          setAgentStatus((prev) => {
+            if (prev === 'generating') return 'generating';
+            return lastWasAsk ? 'awaiting_human' : null;
+          });
+          const collapsed = loaded.map((m) => ({
+            ...m,
+            collapsed: m.type === 'tool_call' || m.type === 'tool_result' || m.type === 'thinking' ? true : m.collapsed,
+            subagentStatus: m.subagentStatus === 'running' ? 'interrupted' : m.subagentStatus,
+          }));
           setMessages((prev) => {
             if (prev.length === 0) {
               return collapsed;
@@ -253,25 +296,67 @@ function App() {
         }
 
         // Handle Real-Time Subagent Telemetry Events
-        if (data.type === 'subagent_event') {
-          const normName = normalizeSubagentName(data.subagent);
+        if (data.type === 'subagent_event' || data.event === 'subagent_event' || (data.subagent && (data.event || data.type))) {
+          const normSubagent = normalizeSubagentName(data.subagent);
+          const eventKind = data.event || data.type;
           setMessages((prev) => {
             const updated = [...prev];
+            let matchIdx = -1;
             for (let i = updated.length - 1; i >= 0; i--) {
-              if (
-                updated[i].type === 'tool_call' &&
-                normalizeSubagentName(updated[i].name) === normName
-              ) {
-                const existingEvents = updated[i].subagentEvents || [];
-                updated[i] = {
-                  ...updated[i],
-                  subagentEvents: [...existingEvents, { ...data, timestamp }],
-                  subagentStatus: data.event === 'finish' ? 'completed' : 'running',
-                };
-                return updated;
+              const msg = updated[i];
+              if (msg.type !== 'tool_call') continue;
+
+              const normMsg = normalizeSubagentName(msg.name);
+              const isMatch =
+                msg.name === 'task' ||
+                msg.name === data.subagent ||
+                normMsg === normSubagent ||
+                normMsg === data.subagent ||
+                msg.name === normSubagent ||
+                msg.arguments?.agent === data.subagent ||
+                msg.arguments?.agent === normSubagent ||
+                (Array.isArray(msg.arguments?.tasks) &&
+                  msg.arguments.tasks.some(
+                    (t) => t.agent === data.subagent || t.name === data.id || t.agent === normSubagent
+                  ));
+
+              if (isMatch) {
+                matchIdx = i;
+                break;
               }
             }
-            return updated;
+
+            if (matchIdx >= 0) {
+              const msg = updated[matchIdx];
+              const existingEvents = msg.subagentEvents || [];
+              updated[matchIdx] = {
+                ...msg,
+                subagentEvents: [...existingEvents, { ...data, timestamp }],
+                subagentStatus:
+                  eventKind === 'finish'
+                    ? data.status === 'failed'
+                      ? 'failed'
+                      : 'completed'
+                    : 'running',
+              };
+              return updated;
+            }
+
+            // Fallback: If no tool_call card exists yet, create one so real-time events are never dropped
+            const newSubagentCard = {
+              type: 'tool_call',
+              name: data.subagent || 'task',
+              arguments: { agent: data.subagent, id: data.id, task: data.task || data.content || '' },
+              subagentEvents: [{ ...data, timestamp }],
+              subagentStatus:
+                eventKind === 'finish'
+                  ? data.status === 'failed'
+                    ? 'failed'
+                    : 'completed'
+                  : 'running',
+              timestamp,
+            };
+            return [...updated, newSubagentCard];
           });
           return;
         }
@@ -282,15 +367,22 @@ function App() {
           setMessages((prev) => {
             const updated = [...prev];
             for (let i = updated.length - 1; i >= 0; i--) {
-              if (
-                updated[i].type === 'tool_call' &&
-                normalizeSubagentName(updated[i].name) === normName
-              ) {
+              const msg = updated[i];
+              if (msg.type !== 'tool_call') continue;
+
+              const isMatch =
+                (msg.name === 'task' && data.name === 'task') ||
+                normalizeSubagentName(msg.name) === normName;
+
+              if (isMatch) {
                 updated[i] = {
-                  ...updated[i],
-                  subagentStatus: 'completed',
-                  subagentEvents: data.subagentEvents || updated[i].subagentEvents || [],
-                  subagentMetrics: data.subagentMetrics || updated[i].subagentMetrics || {},
+                  ...msg,
+                  subagentStatus: data.subagentStatus || 'completed',
+                  subagentEvents:
+                    data.subagentEvents && data.subagentEvents.length > 0
+                      ? data.subagentEvents
+                      : msg.subagentEvents || [],
+                  subagentMetrics: data.subagentMetrics || msg.subagentMetrics || {},
                   result: data.result,
                 };
                 break;
@@ -304,16 +396,20 @@ function App() {
         const isTerminalStatus =
           data.type === 'status' &&
           (data.content === 'Done' ||
+            data.content === 'AwaitingHuman' ||
             data.content?.startsWith('Error') ||
-
             data.content?.startsWith('Harness Error') ||
             data.content?.startsWith('Ollama Error') ||
             data.content?.startsWith('Stopped'));
 
         if (isTerminalStatus) {
-          setIsAgentRunning(false);
-          if (data.content === 'Done') {
+          if (data.content === 'AwaitingHuman') {
+            setAgentStatus('awaiting_human');
+          } else if (data.content === 'Done') {
+            setAgentStatus('done');
             setLastChangeTimestamp(Date.now());
+          } else {
+            setAgentStatus(null);
           }
         }
 
@@ -359,8 +455,7 @@ function App() {
   const handleSendMessage = (prompt) => {
     if (!prompt) return;
 
-    setIsAgentRunning(true);
-
+    setAgentStatus('generating');
     // Add user message to UI
     setMessages((prev) => [
       ...prev,
@@ -400,7 +495,7 @@ function App() {
   const handleCreateProject = async (prompt, projectName) => {
     try {
       setIsTransitioning(true);
-      setIsAgentRunning(true);
+      setAgentStatus('generating');
 
       const response = await fetch(`${API_BASE_URL}/api/projects`, {
         method: 'POST',
@@ -418,13 +513,14 @@ function App() {
     } catch (err) {
       console.error('Failed to create project', err);
       alert('Failed to create project.');
-      setIsAgentRunning(false);
+      setAgentStatus(null);
       setIsTransitioning(false);
     }
   };
 
 
   const handleGoToBrowser = () => {
+    setAgentStatus(null);
     setCurrentView('welcome');
     setActiveProject(null);
     setPreviewData(null);
@@ -434,7 +530,6 @@ function App() {
     } catch (e) {
       console.error('Failed to clear active project:', e);
     }
-    // Instruct backend to close active project
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(
         JSON.stringify({
@@ -481,7 +576,7 @@ function App() {
     if (wsRef.current && isConnected) {
       wsRef.current.send(JSON.stringify({ action: 'stop_agent' }));
     }
-    setIsAgentRunning(false);
+    setAgentStatus(null);
   };
 
   return (
@@ -505,6 +600,8 @@ function App() {
           onSendMessage={handleSendMessage}
           isConnected={isConnected}
           isAgentRunning={isAgentRunning}
+          agentStatus={agentStatus}
+          onClearStatus={() => setAgentStatus(null)}
           previewData={previewData}
           lastChangeTimestamp={lastChangeTimestamp}
           onStopPreview={handleStopPreview}

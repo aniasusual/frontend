@@ -4,7 +4,7 @@ import CommandApproval from './CommandApproval';
 import ModelSelector from './ModelSelector';
 import SubagentPanel from './SubagentPanel';
 import ContextGauge from './ContextGauge';
-import { getSubagentSessionData } from './subagentUtils';
+import { getSubagentSessionData, isSubagentTool } from './subagentUtils';
 import './ChatPanel.css';
 
 const SendIcon = () => (
@@ -25,6 +25,8 @@ export default function ChatPanel({
   onSendMessage,
   isConnected,
   isAgentRunning,
+  agentStatus = null,
+  onClearStatus,
   pendingApproval,
   onApproveCommand,
   onDenyCommand,
@@ -49,7 +51,9 @@ export default function ChatPanel({
   };
 
   const handleOpenSubagent = (msg) => {
-    setSelectedSubagentMsg(msg);
+    if (msg && isSubagentTool(msg.name)) {
+      setSelectedSubagentMsg(msg);
+    }
   };
 
   const handleCloseSubagent = () => {
@@ -57,19 +61,18 @@ export default function ChatPanel({
   };
 
   // Keep active subagent data reactive to incoming live websocket events
-  const activeSubagentData = selectedSubagentMsg
+  const activeSubagentData = selectedSubagentMsg && isSubagentTool(selectedSubagentMsg.name)
     ? getSubagentSessionData(
         messages?.find((m) => m === selectedSubagentMsg || (selectedSubagentMsg.timestamp && m.timestamp === selectedSubagentMsg.timestamp))
         || messages?.slice().reverse().find(
           (m) =>
             (m.type === 'tool_call' || m.type === 'tool_result') &&
-            m.name &&
-            selectedSubagentMsg.name &&
+            isSubagentTool(m.name) &&
             (m.name === selectedSubagentMsg.name || m.name.includes(selectedSubagentMsg.name.replace('invoke_', '')))
         )
         || selectedSubagentMsg,
         messages
-      ) || selectedSubagentMsg
+      )
     : null;
 
   const handleScroll = () => {
@@ -178,19 +181,15 @@ export default function ChatPanel({
         onApprove={onApproveCommand}
         onDeny={onDenyCommand}
       />
-
       <form className="chat-panel__input-area" onSubmit={handleSubmit}>
-        {isConnected && (
+        {isConnected && agentStatus && (
           <div
-            className={`chat-panel__agent-status ${isAgentRunning
-                ? 'chat-panel__agent-status--running'
-                : 'chat-panel__agent-status--idle'
-              }`}
+            className={`chat-panel__agent-status chat-panel__agent-status--${agentStatus}`}
           >
             <span className="chat-panel__agent-status-label">
-              {isAgentRunning
-                ? 'Agent is generating...'
-                : 'Agent is awaiting human response'}
+              {agentStatus === 'generating' && 'Agent is generating...'}
+              {agentStatus === 'awaiting_human' && 'Agent is awaiting human response'}
+              {agentStatus === 'done' && 'Done'}
             </span>
           </div>
         )}
@@ -199,13 +198,20 @@ export default function ChatPanel({
           <textarea
             className="chat-panel__input"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              if (agentStatus === 'done') {
+                onClearStatus?.();
+              }
+            }}
             onKeyDown={handleKeyDown}
             placeholder={
               !isConnected
                 ? 'Connecting...'
-                : isAgentRunning
+                : agentStatus === 'generating'
                 ? 'Agent is generating...'
+                : agentStatus === 'awaiting_human'
+                ? 'Answer the agent...'
                 : 'Describe a change...'
             }
             disabled={!isConnected || isAgentRunning}

@@ -165,10 +165,14 @@ export default function ChatMessage({ message, isActive, onOpenSubagent }) {
     if (message.type === 'tool_call') {
       const isSubagent = isSubagentTool(message.name);
       const isRunning = isActive && !message.collapsed;
+      const isSubagentRunning = isSubagent && isActive && isRunning && (
+        message.subagentStatus === 'running' ||
+        (message.subagentStatus !== 'completed' && message.subagentStatus !== 'failed' && message.subagentStatus !== 'interrupted')
+      );
+      const isSubagentFinished = isSubagent && !isSubagentRunning;
       const argsStr = message.arguments
         ? (typeof message.arguments === 'string' ? message.arguments : JSON.stringify(message.arguments, null, 2))
         : '';
-
       // Extract file targets for friendly display
       let fileList = [];
       if (message.name === 'write_files') {
@@ -190,7 +194,7 @@ export default function ChatMessage({ message, isActive, onOpenSubagent }) {
         }
       };
 
-      const subagentLabel = isSubagent ? getSubagentDisplayName(message.name) : message.name;
+      const subagentLabel = isSubagent ? getSubagentDisplayName(message.name, message.arguments) : message.name;
 
       return (
         <div className={`chat-msg chat-msg--tool_call ${isSubagent ? 'chat-msg--subagent-card' : ''}`}>
@@ -236,6 +240,90 @@ export default function ChatMessage({ message, isActive, onOpenSubagent }) {
                     </span>
                   </div>
                 </div>
+                {isSubagent && (
+                  <div
+                    className="chat-msg__subagent-preview"
+                    style={{
+                      padding: '6px 12px 8px',
+                      borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+                      fontSize: '12px',
+                    }}
+                  >
+                    {isSubagentFinished ? (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          color: 'var(--text-tertiary, rgba(255, 255, 255, 0.45))',
+                          fontSize: '12px',
+                        }}
+                      >
+                        <span>{message.subagentStatus === 'failed' ? 'Subagent failed' : 'Subagent finished'}</span>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            color: 'var(--text-secondary, rgba(255, 255, 255, 0.75))',
+                            fontSize: '12px',
+                          }}
+                        >
+                          <span>Active subagent running...</span>
+                        </div>
+                        {message.subagentEvents && message.subagentEvents.length > 0 && (
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '2px',
+                              marginTop: '2px',
+                            }}
+                          >
+                            {message.subagentEvents.slice(-4).map((evt, idx) => {
+                              let lineText = '';
+                              if (evt.event === 'thought' && evt.content) {
+                                lineText = `💭 ${evt.content.replace(/\s+/g, ' ').trim()}`;
+                              } else if (evt.event === 'tool_call') {
+                                const argsPreview = evt.arguments ? JSON.stringify(evt.arguments) : '';
+                                lineText = `🔧 ${evt.tool}${argsPreview ? `(${argsPreview})` : ''}`;
+                              } else if (evt.event === 'tool_executed') {
+                                const shortRes = typeof evt.result === 'string' ? evt.result.replace(/\s+/g, ' ').trim() : JSON.stringify(evt.result || '');
+                                lineText = `✓ ${evt.tool || 'action'}: ${shortRes}`;
+                              } else if (evt.event === 'finish') {
+                                lineText = `🏁 Concluded (${evt.status || 'completed'})`;
+                              }
+                              if (!lineText) return null;
+                              return (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    fontSize: '11px',
+                                    color: 'rgba(255, 255, 255, 0.45)',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    lineHeight: '1.4',
+                                  }}
+                                  title={lineText}
+                                >
+                                  {lineText}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {!isSubagent && isExpanded && argsStr && <pre className="chat-msg__details">{argsStr}</pre>}
               </div>
             </div>
@@ -254,7 +342,7 @@ export default function ChatMessage({ message, isActive, onOpenSubagent }) {
     if (message.type === 'tool_result') {
       const isSubagent = isSubagentTool(message.name);
       const resultStr = typeof message.result === 'string' ? message.result : JSON.stringify(message.result, null, 2);
-      const subagentLabel = isSubagent ? getSubagentDisplayName(message.name) : message.name;
+      const subagentLabel = isSubagent ? getSubagentDisplayName(message.name, message.arguments) : message.name;
 
       const handleClick = (e) => {
         if (isSubagent && onOpenSubagent) {
@@ -295,7 +383,7 @@ export default function ChatMessage({ message, isActive, onOpenSubagent }) {
                     </span>
                   </div>
                 </div>
-                {!isSubagent && isExpanded && resultStr && <pre className="chat-msg__details">{resultStr}</pre>}
+                {isExpanded && resultStr && <pre className="chat-msg__details">{resultStr}</pre>}
               </div>
             </div>
           </div>

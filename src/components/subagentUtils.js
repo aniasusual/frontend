@@ -3,6 +3,13 @@
  */
 
 export const SUBAGENT_NAMES = [
+  'task',
+  'tester',
+  'scout',
+  'reviewer',
+  'security_reviewer',
+  'troubleshoot',
+  'design',
   'invoke_design_agent',
   'invoke_testing_agent',
   'invoke_troubleshoot_agent',
@@ -11,22 +18,45 @@ export const SUBAGENT_NAMES = [
 ];
 
 export const SUBAGENT_MAP = {
-  design_agent: 'invoke_design_agent',
-  troubleshoot_agent: 'invoke_troubleshoot_agent',
-  code_reviewer_agent: 'invoke_code_reviewer_agent',
-  reviewer_agent: 'invoke_code_reviewer_agent',
-  vision_subagent: 'invoke_vision_agent',
+  tester: 'tester',
+  testing: 'tester',
+  testing_agent: 'tester',
+  ui_testing_agent: 'tester',
+  invoke_testing_agent: 'tester',
+
+  design: 'design',
+  design_agent: 'design',
+  invoke_design_agent: 'design',
+
+  troubleshoot: 'troubleshoot',
+  troubleshoot_agent: 'troubleshoot',
+  invoke_troubleshoot_agent: 'troubleshoot',
+
+  reviewer: 'reviewer',
+  reviewer_agent: 'reviewer',
+  code_reviewer_agent: 'reviewer',
+  invoke_code_reviewer_agent: 'reviewer',
+
+  security_reviewer: 'security_reviewer',
+  security_reviewer_agent: 'security_reviewer',
+
+  scout: 'scout',
+  task: 'task',
+
+  vision: 'invoke_vision_agent',
   vision_agent: 'invoke_vision_agent',
-  ui_testing_agent: 'invoke_testing_agent',
-  testing_agent: 'invoke_testing_agent',
-  invoke_design_agent: 'invoke_design_agent',
-  invoke_troubleshoot_agent: 'invoke_troubleshoot_agent',
-  invoke_code_reviewer_agent: 'invoke_code_reviewer_agent',
+  vision_subagent: 'invoke_vision_agent',
   invoke_vision_agent: 'invoke_vision_agent',
-  invoke_testing_agent: 'invoke_testing_agent',
 };
 
 export const SUBAGENT_DISPLAY_NAMES = {
+  task: 'Task Subagent',
+  scout: 'Scout (Explorer)',
+  reviewer: 'Code Reviewer',
+  security_reviewer: 'Security Auditor',
+  troubleshoot: 'Troubleshoot Subagent',
+  design: 'Design Subagent',
+  tester: 'UI Testing Subagent',
   invoke_design_agent: 'Design Subagent',
   invoke_testing_agent: 'UI Testing Subagent',
   invoke_troubleshoot_agent: 'Troubleshoot Subagent',
@@ -45,7 +75,14 @@ export function isSubagentTool(name) {
   return SUBAGENT_NAMES.includes(normalized);
 }
 
-export function getSubagentDisplayName(name) {
+export function getSubagentDisplayName(name, args = null) {
+  if (name === 'task') {
+    const agentKey = args?.agent || (Array.isArray(args?.tasks) ? 'batch' : 'task');
+    if (agentKey === 'batch') {
+      return `Batch Tasks (${args.tasks.length} agents)`;
+    }
+    return SUBAGENT_DISPLAY_NAMES[agentKey] || `Subagent (${agentKey})`;
+  }
   const normalized = normalizeSubagentName(name);
   return SUBAGENT_DISPLAY_NAMES[normalized] || normalized || 'Subagent';
 }
@@ -54,9 +91,8 @@ export function getSubagentDisplayName(name) {
  * Aggregates tool_call and tool_result pairing into a full subagent session object.
  */
 export function getSubagentSessionData(message, allMessages = []) {
-  if (!message) return null;
+  if (!message || !isSubagentTool(message.name)) return null;
   const normName = normalizeSubagentName(message.name);
-
   let toolCallMsg = message.type === 'tool_call' ? message : null;
   let toolResultMsg = message.type === 'tool_result' ? message : null;
 
@@ -89,7 +125,7 @@ export function getSubagentSessionData(message, allMessages = []) {
   const status =
     (result || finishEvt || toolResultMsg || toolCallMsg?.subagentStatus === 'completed')
       ? 'completed'
-      : (toolCallMsg?.subagentStatus || 'running');
+      : (toolCallMsg?.subagentStatus || 'interrupted');
 
   // Extract or aggregate token metrics
   const rawMetrics = toolCallMsg?.subagentMetrics || toolResultMsg?.subagentMetrics || message.subagentMetrics;
@@ -150,18 +186,20 @@ export function convertSubagentEventsToMessages(subagentData) {
   const messages = [];
 
   // 1. Initial user task/instruction
+  const rawArgs = subagentData.arguments;
   const task =
     subagentData.task ||
-    (subagentData.arguments
-      ? typeof subagentData.arguments === 'string'
-        ? subagentData.arguments
-        : subagentData.arguments.problem_statement ||
-          subagentData.arguments.error_log ||
-          subagentData.arguments.instructions ||
-          subagentData.arguments.target_files ||
-          JSON.stringify(subagentData.arguments, null, 2)
+    (rawArgs
+      ? typeof rawArgs === 'string'
+        ? rawArgs
+        : rawArgs.task ||
+          rawArgs.problem_statement ||
+          rawArgs.error_log ||
+          rawArgs.instructions ||
+          rawArgs.target_files ||
+          // Only use JSON stringify if not raw file/process tool parameters
+          (rawArgs.file_path || rawArgs.content || rawArgs.command ? '' : JSON.stringify(rawArgs, null, 2))
       : '');
-
   const firstDebug = subagentData.events?.find((e) => e.debug)?.debug;
 
   if (task) {

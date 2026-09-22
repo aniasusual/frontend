@@ -10,6 +10,8 @@ export default function WorkspaceView({
   onSendMessage,
   isConnected,
   isAgentRunning,
+  agentStatus = null,
+  onClearStatus,
   previewData,
   lastChangeTimestamp,
   onStopPreview,
@@ -98,6 +100,8 @@ export default function WorkspaceView({
             onSendMessage={onSendMessage}
             isConnected={isConnected}
             isAgentRunning={isAgentRunning}
+            agentStatus={agentStatus}
+            onClearStatus={onClearStatus}
             pendingApproval={pendingApproval}
             onApproveCommand={onApproveCommand}
             onDenyCommand={onDenyCommand}

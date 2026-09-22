@@ -24,9 +24,11 @@ export default function SubagentPanel({ subagent, onClose, isActive = false }) {
   const messagesEndRef = useRef(null);
   const isUserScrolledRef = useRef(false);
 
-  const displayName = getSubagentDisplayName(subagent?.name);
-  const status = subagent?.status || (isActive ? 'running' : 'completed');
-  const isRunning = status === 'running';
+  const displayName = getSubagentDisplayName(subagent?.name, subagent?.arguments);
+  const isRunning = Boolean(isActive && subagent?.status === 'running');
+  const status = isRunning
+    ? 'running'
+    : (subagent?.status === 'failed' ? 'failed' : (subagent?.status === 'interrupted' ? 'interrupted' : 'completed'));
 
   // Convert subagent telemetry events and activity into standard chat messages
   const messages = convertSubagentEventsToMessages(subagent);
@@ -139,7 +141,11 @@ export default function SubagentPanel({ subagent, onClose, isActive = false }) {
           <span className="chat-panel__agent-status-label">
             {isRunning
               ? 'Subagent is running...'
-              : 'Subagent completed'}
+              : status === 'failed'
+                ? 'Subagent failed'
+                : status === 'interrupted'
+                  ? 'Subagent interrupted'
+                  : 'Subagent completed'}
           </span>
         </div>
       </div>

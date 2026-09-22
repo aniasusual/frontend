@@ -73,7 +73,7 @@ Lowkey is composed of two primary layers:
 |                                                                                                    |
 |  [coding_harness.py]                                                                               |
 |  10. [agent_loader.py] loads model YAML spec (e.g. qwen2.5_coder_7b.yaml) -> whitelist tools       |
-|  11. [context_manager.py] compacts message history & injects system prompt + recency anchor        |
+|  11. [context_manager.py] compacts message history & injects system prompt                        |
 |                                                                                                    |
 |  === THE AGENTIC LOOP (Ollama Local LLM) ========================================================  |
 |  12. Streams Ollama chat response:                                                                 |
