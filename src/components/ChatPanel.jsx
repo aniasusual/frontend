@@ -4,7 +4,7 @@ import CommandApproval from './CommandApproval';
 import ModelSelector from './ModelSelector';
 import SubagentPanel from './SubagentPanel';
 import ContextGauge from './ContextGauge';
-import { getSubagentSessionData, isSubagentTool } from './subagentUtils';
+import { getSubagentSessionData, isSubagentTool, normalizeSubagentName } from './subagentUtils';
 import './ChatPanel.css';
 
 const SendIcon = () => (
@@ -19,6 +19,59 @@ const StopIcon = () => (
     <rect x="5" y="5" width="14" height="14" rx="2" ry="2"></rect>
   </svg>
 );
+const parseTodoText = (text) => {
+  if (!text || typeof text !== 'string') return [];
+  const phases = [];
+  let currentPhase = null;
+  const lines = text.split('\n');
+  for (const line of lines) {
+    const phaseMatch = line.match(/^\s{2}([A-Za-z0-9_\-\s]+):$/);
+    if (phaseMatch) {
+      currentPhase = { name: phaseMatch[1].trim(), tasks: [] };
+      phases.push(currentPhase);
+      continue;
+    }
+    const taskMatch = line.match(/^\s*-\s*\[([ Xx])\]\s*(.+)$/);
+    if (taskMatch) {
+      if (!currentPhase) {
+        currentPhase = { name: 'Tasks', tasks: [] };
+        phases.push(currentPhase);
+      }
+      const isCompleted = taskMatch[1].toUpperCase() === 'X';
+      let content = taskMatch[2].trim();
+      let status = isCompleted ? 'completed' : 'pending';
+      let blocker = null;
+
+      if (content.endsWith('(in progress)')) {
+        status = 'in_progress';
+        content = content.replace(/\(in progress\)$/, '').trim();
+      } else if (content.endsWith('(dropped)')) {
+        status = 'abandoned';
+        content = content.replace(/\(dropped\)$/, '').trim();
+      } else if (content.includes('(blocked')) {
+        status = 'blocked';
+        const blockMatch = content.match(/\(blocked(?::\s*([^)]+))?\)$/);
+        if (blockMatch && blockMatch[1]) {
+          blocker = blockMatch[1].trim();
+        }
+        content = content.replace(/\(blocked.*?\)$/, '').trim();
+      }
+
+      currentPhase.tasks.push({ content, status, blocker });
+    }
+  }
+  return phases;
+};
+
+const getTodoStats = (phases = []) => {
+  const tasks = phases.flatMap((p) => p.tasks || []);
+  const completed = tasks.filter((t) => t.status === 'completed').length;
+  const total = tasks.length;
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const activeTask = tasks.find((t) => t.status === 'in_progress');
+  return { completed, total, percent, activeTask };
+};
+
 
 export default function ChatPanel({
   messages,
@@ -37,16 +90,20 @@ export default function ChatPanel({
   onRefreshModels,
   contextTelemetry,
   onStopAgent,
+  todoState = null,
+  _checkpointTimeline = [],
+  onRewindToStep = null,
 }) {
   const [input, setInput] = useState('');
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
   const [selectedSubagentMsg, setSelectedSubagentMsg] = useState(null);
+  const [isTodoExpanded, setIsTodoExpanded] = useState(false);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
   const isUserScrolledRef = useRef(false);
 
   const currentModelObj = models.find((m) => m.id === selectedModel) || {
-    name: selectedModel || 'qwen2.5-coder:14b',
+    name: selectedModel || 'qwen3:8b',
     compatibility_label: 'Optimal',
   };
 
@@ -60,6 +117,34 @@ export default function ChatPanel({
     setSelectedSubagentMsg(null);
   };
 
+  // Derive active todo state from todoState prop or latest todo message
+  const activeTodos = (() => {
+    if (todoState && Array.isArray(todoState.phases) && todoState.phases.length > 0) {
+      return todoState;
+    }
+    if (Array.isArray(messages)) {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i];
+        if (!msg) continue;
+        if (Array.isArray(msg.phases) && msg.phases.length > 0) {
+          return { phases: msg.phases, op: msg.op || 'view' };
+        }
+        const rawArgs = msg.arguments || msg.data;
+        if (rawArgs && Array.isArray(rawArgs.phases) && rawArgs.phases.length > 0) {
+          return { phases: rawArgs.phases, op: rawArgs.op || 'view' };
+        }
+        if (msg.name === 'todo' && msg.result && typeof msg.result === 'string') {
+          const parsed = parseTodoText(msg.result);
+          if (parsed && parsed.length > 0) {
+            return { phases: parsed, op: 'view' };
+          }
+        }
+      }
+    }
+    return null;
+  })();
+  const todoStats = activeTodos?.phases ? getTodoStats(activeTodos.phases) : null;
+
   // Keep active subagent data reactive to incoming live websocket events
   const activeSubagentData = selectedSubagentMsg && isSubagentTool(selectedSubagentMsg.name)
     ? getSubagentSessionData(
@@ -68,7 +153,7 @@ export default function ChatPanel({
           (m) =>
             (m.type === 'tool_call' || m.type === 'tool_result') &&
             isSubagentTool(m.name) &&
-            (m.name === selectedSubagentMsg.name || m.name.includes(selectedSubagentMsg.name.replace('invoke_', '')))
+            (m.name === selectedSubagentMsg.name || normalizeSubagentName(m.name) === normalizeSubagentName(selectedSubagentMsg.name))
         )
         || selectedSubagentMsg,
         messages
@@ -143,6 +228,8 @@ export default function ChatPanel({
             message={msg}
             isActive={isAgentRunning && i === messages.length - 1}
             onOpenSubagent={handleOpenSubagent}
+            onSelectOption={(answer) => onSendMessage?.(answer)}
+            onRewindToStep={onRewindToStep}
           />
         ))}
 
@@ -181,6 +268,87 @@ export default function ChatPanel({
         onApprove={onApproveCommand}
         onDeny={onDenyCommand}
       />
+      {/* Collapsible Todo Progress Sheet docked right above the input box */}
+      {activeTodos && activeTodos.phases && activeTodos.phases.length > 0 && todoStats && (
+        <div className={`chat-panel__todo-sheet ${isTodoExpanded ? 'chat-panel__todo-sheet--expanded' : ''}`}>
+          <div
+            className="chat-panel__todo-ribbon"
+            onClick={() => setIsTodoExpanded((prev) => !prev)}
+            title="Toggle task checklist"
+          >
+            <div className="chat-panel__todo-ribbon-left">
+              <span className="chat-panel__todo-title">
+                Tasks · {todoStats.completed} of {todoStats.total}
+              </span>
+              {todoStats.activeTask && (
+                <span className="chat-panel__todo-active-chip" title={todoStats.activeTask.content}>
+                  {todoStats.activeTask.content}
+                </span>
+              )}
+            </div>
+            <div className="chat-panel__todo-ribbon-right">
+              <span className="chat-panel__todo-toggle-label">{isTodoExpanded ? 'Hide' : 'Show'}</span>
+              <svg
+                className={`chat-panel__todo-chevron ${isTodoExpanded ? 'chat-panel__todo-chevron--up' : ''}`}
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
+          </div>
+
+          {isTodoExpanded && (
+            <div className="chat-panel__todo-content">
+              {activeTodos.phases.map((phase, pIdx) => {
+                const pCompleted = (phase.tasks || []).filter((t) => t.status === 'completed').length;
+                const pTotal = (phase.tasks || []).length;
+                return (
+                  <div key={pIdx} className="chat-panel__todo-phase">
+                    <div className="chat-panel__todo-phase-head">
+                      <span className="chat-panel__todo-phase-title">{phase.name}</span>
+                      <span className="chat-panel__todo-phase-count">{pCompleted}/{pTotal}</span>
+                    </div>
+                    <div className="chat-panel__todo-task-list">
+                      {(phase.tasks || []).map((task, tIdx) => {
+                        const isDone = task.status === 'completed';
+                        const isRunning = task.status === 'in_progress';
+                        const isBlocked = task.status === 'blocked';
+                        const isDropped = task.status === 'abandoned';
+
+                        return (
+                          <div
+                            key={tIdx}
+                            className={`chat-panel__todo-task-item ${isDone ? 'chat-panel__todo-task-item--done' : ''}`}
+                          >
+                            <span className="chat-panel__todo-checkbox">
+                              {isDone ? '✓' : ''}
+                            </span>
+                            <span className={`chat-panel__todo-item-text ${isDone || isDropped ? 'chat-panel__todo-item-text--done' : ''} ${isRunning ? 'chat-panel__todo-item-text--active' : ''}`}>
+                              {task.content}
+                              {isRunning && <span className="chat-panel__todo-status-note">in progress</span>}
+                              {isBlocked && (
+                                <span className="chat-panel__todo-status-note">
+                                  {task.blocker ? `blocked: ${task.blocker}` : 'blocked'}
+                                </span>
+                              )}
+                              {isDropped && <span className="chat-panel__todo-status-note">dropped</span>}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
       <form className="chat-panel__input-area" onSubmit={handleSubmit}>
         {isConnected && agentStatus && (
           <div

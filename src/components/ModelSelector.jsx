@@ -135,7 +135,7 @@ export default function ModelSelector({
         if (nextInstalled) {
           onSelectModel(nextInstalled.id);
         } else {
-          onSelectModel('qwen2.5-coder:14b');
+          onSelectModel('qwen3:8b');
         }
       }
     } catch (err) {
@@ -185,7 +185,7 @@ export default function ModelSelector({
           <input
             type="text"
             className="notion-modal__search-input"
-            placeholder="Search models (e.g. qwen, deepseek, 14b, 30b)..."
+            placeholder="Search models (e.g. qwen, 8b)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             autoFocus

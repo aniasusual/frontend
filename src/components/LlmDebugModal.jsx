@@ -1,44 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import './LlmDebugModal.css';
 
-const ChevronRight = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="9 18 15 12 9 6"></polyline>
-  </svg>
-);
-
-const ChevronDown = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="6 9 12 15 18 9"></polyline>
-  </svg>
-);
-
-const CopyIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12"></polyline>
-  </svg>
-);
-
-const CloseIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18"></line>
-    <line x1="6" y1="6" x2="18" y2="18"></line>
-  </svg>
-);
-
-function JsonTreeNode({ name, value, isLast = true, depth = 0, globalExpand }) {
+function JsonNode({ name, value, isLast = true, depth = 0, globalExpand }) {
   const isArray = Array.isArray(value);
   const isObject = value !== null && typeof value === 'object' && !isArray;
 
-  // Top level fields (depth < 2) start expanded; deeper nodes start collapsed
-  const [isCollapsed, setIsCollapsed] = useState(() => depth >= 2);
+  // Default: depth 0 expanded, deeper levels collapsed for clean overview
+  const [isCollapsed, setIsCollapsed] = useState(() => depth >= 1);
 
   useEffect(() => {
     if (globalExpand) {
@@ -58,6 +26,7 @@ function JsonTreeNode({ name, value, isLast = true, depth = 0, globalExpand }) {
   if (value === null) {
     return (
       <div className="json-line">
+        <span className="json-indent" style={{ width: depth * 16 }} />
         {renderKey()}
         <span className="json-null">null</span>
         {!isLast && <span className="json-comma">,</span>}
@@ -68,6 +37,7 @@ function JsonTreeNode({ name, value, isLast = true, depth = 0, globalExpand }) {
   if (typeof value === 'boolean') {
     return (
       <div className="json-line">
+        <span className="json-indent" style={{ width: depth * 16 }} />
         {renderKey()}
         <span className="json-boolean">{String(value)}</span>
         {!isLast && <span className="json-comma">,</span>}
@@ -78,6 +48,7 @@ function JsonTreeNode({ name, value, isLast = true, depth = 0, globalExpand }) {
   if (typeof value === 'number') {
     return (
       <div className="json-line">
+        <span className="json-indent" style={{ width: depth * 16 }} />
         {renderKey()}
         <span className="json-number">{value}</span>
         {!isLast && <span className="json-comma">,</span>}
@@ -88,6 +59,7 @@ function JsonTreeNode({ name, value, isLast = true, depth = 0, globalExpand }) {
   if (typeof value === 'string') {
     return (
       <div className="json-line">
+        <span className="json-indent" style={{ width: depth * 16 }} />
         {renderKey()}
         <span className="json-string">{JSON.stringify(value)}</span>
         {!isLast && <span className="json-comma">,</span>}
@@ -99,6 +71,7 @@ function JsonTreeNode({ name, value, isLast = true, depth = 0, globalExpand }) {
     if (value.length === 0) {
       return (
         <div className="json-line">
+          <span className="json-indent" style={{ width: depth * 16 }} />
           {renderKey()}
           <span className="json-bracket">[]</span>
           {!isLast && <span className="json-comma">,</span>}
@@ -108,51 +81,49 @@ function JsonTreeNode({ name, value, isLast = true, depth = 0, globalExpand }) {
 
     return (
       <div className="json-node">
-        <div className="json-line json-line--expandable">
+        <div
+          className="json-line json-line--expandable"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+        >
+          <span className="json-indent" style={{ width: depth * 16 }} />
           <button
             type="button"
-            className="json-toggle"
-            onClick={() => setIsCollapsed((prev) => !prev)}
-            title={isCollapsed ? 'Expand array' : 'Collapse array'}
+            className="json-toggle-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsCollapsed(!isCollapsed);
+            }}
           >
-            {isCollapsed ? <ChevronRight /> : <ChevronDown />}
+            {isCollapsed ? '+' : '-'}
           </button>
           {renderKey()}
           <span className="json-bracket">[</span>
-          {isCollapsed && (
+          {isCollapsed ? (
             <>
-              <button
-                type="button"
-                className="json-collapsed-summary"
-                onClick={() => setIsCollapsed(false)}
-              >
-                {value.length} {value.length === 1 ? 'item' : 'items'}
-              </button>
+              <span className="json-collapsed-text"> {value.length} items </span>
               <span className="json-bracket">]</span>
               {!isLast && <span className="json-comma">,</span>}
             </>
-          )}
+          ) : null}
         </div>
-
         {!isCollapsed && (
-          <>
-            <div className="json-children">
-              {value.map((item, idx) => (
-                <JsonTreeNode
-                  key={idx}
-                  name={idx}
-                  value={item}
-                  isLast={idx === value.length - 1}
-                  depth={depth + 1}
-                  globalExpand={globalExpand}
-                />
-              ))}
-            </div>
-            <div className="json-line json-line--closing">
+          <div className="json-children">
+            {value.map((item, idx) => (
+              <JsonNode
+                key={idx}
+                name={idx}
+                value={item}
+                isLast={idx === value.length - 1}
+                depth={depth + 1}
+                globalExpand={globalExpand}
+              />
+            ))}
+            <div className="json-line">
+              <span className="json-indent" style={{ width: depth * 16 }} />
               <span className="json-bracket">]</span>
               {!isLast && <span className="json-comma">,</span>}
             </div>
-          </>
+          </div>
         )}
       </div>
     );
@@ -163,8 +134,9 @@ function JsonTreeNode({ name, value, isLast = true, depth = 0, globalExpand }) {
     if (keys.length === 0) {
       return (
         <div className="json-line">
+          <span className="json-indent" style={{ width: depth * 16 }} />
           {renderKey()}
-          <span className="json-bracket">&#123;&#125;</span>
+          <span className="json-brace">{'{ }'}</span>
           {!isLast && <span className="json-comma">,</span>}
         </div>
       );
@@ -172,51 +144,49 @@ function JsonTreeNode({ name, value, isLast = true, depth = 0, globalExpand }) {
 
     return (
       <div className="json-node">
-        <div className="json-line json-line--expandable">
+        <div
+          className="json-line json-line--expandable"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+        >
+          <span className="json-indent" style={{ width: depth * 16 }} />
           <button
             type="button"
-            className="json-toggle"
-            onClick={() => setIsCollapsed((prev) => !prev)}
-            title={isCollapsed ? 'Expand object' : 'Collapse object'}
+            className="json-toggle-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsCollapsed(!isCollapsed);
+            }}
           >
-            {isCollapsed ? <ChevronRight /> : <ChevronDown />}
+            {isCollapsed ? '+' : '-'}
           </button>
           {renderKey()}
-          <span className="json-bracket">&#123;</span>
-          {isCollapsed && (
+          <span className="json-brace">{'{'}</span>
+          {isCollapsed ? (
             <>
-              <button
-                type="button"
-                className="json-collapsed-summary"
-                onClick={() => setIsCollapsed(false)}
-              >
-                {keys.length} {keys.length === 1 ? 'key' : 'keys'}
-              </button>
-              <span className="json-bracket">&#125;</span>
+              <span className="json-collapsed-text"> {keys.length} keys </span>
+              <span className="json-brace">{'}'}</span>
               {!isLast && <span className="json-comma">,</span>}
             </>
-          )}
+          ) : null}
         </div>
-
         {!isCollapsed && (
-          <>
-            <div className="json-children">
-              {keys.map((key, idx) => (
-                <JsonTreeNode
-                  key={key}
-                  name={key}
-                  value={value[key]}
-                  isLast={idx === keys.length - 1}
-                  depth={depth + 1}
-                  globalExpand={globalExpand}
-                />
-              ))}
-            </div>
-            <div className="json-line json-line--closing">
-              <span className="json-bracket">&#125;</span>
+          <div className="json-children">
+            {keys.map((k, idx) => (
+              <JsonNode
+                key={k}
+                name={k}
+                value={value[k]}
+                isLast={idx === keys.length - 1}
+                depth={depth + 1}
+                globalExpand={globalExpand}
+              />
+            ))}
+            <div className="json-line">
+              <span className="json-indent" style={{ width: depth * 16 }} />
+              <span className="json-brace">{'}'}</span>
               {!isLast && <span className="json-comma">,</span>}
             </div>
-          </>
+          </div>
         )}
       </div>
     );
@@ -224,8 +194,9 @@ function JsonTreeNode({ name, value, isLast = true, depth = 0, globalExpand }) {
 
   return (
     <div className="json-line">
+      <span className="json-indent" style={{ width: depth * 16 }} />
       {renderKey()}
-      <span>{String(value)}</span>
+      <span className="json-string">{String(value)}</span>
       {!isLast && <span className="json-comma">,</span>}
     </div>
   );
@@ -251,11 +222,12 @@ export default function LlmDebugModal({ isOpen, onClose, debugData }) {
   let jsonString = '';
 
   if (typeof debugData === 'string') {
-    jsonString = debugData;
     try {
       parsedData = JSON.parse(debugData);
+      jsonString = JSON.stringify(parsedData, null, 2);
     } catch {
       parsedData = debugData;
+      jsonString = String(debugData);
     }
   } else {
     try {
@@ -283,15 +255,12 @@ export default function LlmDebugModal({ isOpen, onClose, debugData }) {
     <div className="llm-debug-overlay" onClick={onClose}>
       <div className="llm-debug-modal" onClick={(e) => e.stopPropagation()}>
         <div className="llm-debug-header">
-          <div className="llm-debug-header__left">
-            <span className="llm-debug-title">Debug JSON Tree</span>
-          </div>
+          <div className="llm-debug-header__title">Debug Context JSON Tree</div>
           <div className="llm-debug-header__actions">
             <button
               type="button"
               className="llm-debug-btn"
               onClick={handleExpandAll}
-              title="Expand all nodes"
             >
               Expand All
             </button>
@@ -299,7 +268,6 @@ export default function LlmDebugModal({ isOpen, onClose, debugData }) {
               type="button"
               className="llm-debug-btn"
               onClick={handleCollapseAll}
-              title="Collapse all nodes"
             >
               Collapse All
             </button>
@@ -307,88 +275,32 @@ export default function LlmDebugModal({ isOpen, onClose, debugData }) {
               type="button"
               className="llm-debug-btn"
               onClick={handleCopy}
-              title="Copy raw JSON"
             >
-              {copied ? <CheckIcon /> : <CopyIcon />}
-              <span>{copied ? 'Copied' : 'Copy JSON'}</span>
+              {copied ? 'Copied' : 'Copy JSON'}
             </button>
             <button
               type="button"
-              className="llm-debug-btn llm-debug-btn--close"
+              className="llm-debug-btn"
               onClick={onClose}
-              title="Close"
             >
-              <CloseIcon />
+              Close
             </button>
           </div>
         </div>
-
         <div className="llm-debug-body">
-          {parsedData?.context_telemetry && (
-            <div className="llm-debug-telemetry-banner">
-              <div className="llm-debug-telemetry-stat">
-                <span className="stat-label">Total Tokens</span>
-                <span className="stat-value">
-                  {parsedData.context_telemetry.total_tokens?.toLocaleString()} / {parsedData.context_telemetry.context_window?.toLocaleString()} ({parsedData.context_telemetry.usage_pct}%)
-                </span>
-              </div>
-              <div className="llm-debug-telemetry-stat">
-                <span className="stat-label">Virtual RAM</span>
-                <span className="stat-value">
-                  {parsedData.context_telemetry.virtual_ram_tokens?.toLocaleString()} tokens ({parsedData.context_telemetry.virtual_ram_files || 0} files)
-                </span>
-              </div>
-              <div className="llm-debug-telemetry-stat">
-                <span className="stat-label">Static Layer</span>
-                <span className="stat-value">
-                  {parsedData.context_telemetry.static_tokens?.toLocaleString()} tokens
-                </span>
-              </div>
-              <div className="llm-debug-telemetry-stat">
-                <span className="stat-label">Ephemeral Turns</span>
-                <span className="stat-value">
-                  {parsedData.context_telemetry.ephemeral_tokens?.toLocaleString() || 0} tokens
-                </span>
-              </div>
-              <div className="llm-debug-telemetry-stat">
-                <span className="stat-label">Context Health</span>
-                <div className="llm-debug-telemetry-health-row">
-                  <span className={`stat-status stat-status--${parsedData.context_telemetry.status || 'normal'}`}>
-                    {parsedData.context_telemetry.status || 'normal'}
-                  </span>
-                  {parsedData.context_telemetry.evicted && (
-                    <span className="stat-badge stat-badge--evicted" title="Historical logs pruned due to token budget caps">
-                      Evicted
-                    </span>
-                  )}
-                  {parsedData.context_telemetry.squashed && (
-                    <span className="stat-badge stat-badge--squashed" title="In-loop tool output middle truncation active">
-                      Squashed
-                    </span>
-                  )}
-                  {parsedData.context_telemetry.rolled_up && (
-                    <span className="stat-badge stat-badge--rolled-up" title="Collapsed intermediate resolved failure loops">
-                      Rolled Up
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-          <div className="json-tree-container">
-            {typeof parsedData === 'object' && parsedData !== null ? (
-              <JsonTreeNode
+          {typeof parsedData === 'object' && parsedData !== null ? (
+            <div className="json-tree">
+              <JsonNode
                 value={parsedData}
                 isLast={true}
                 depth={0}
                 globalExpand={globalExpand}
               />
-            ) : (
-              <pre className="json-raw-fallback">{jsonString}</pre>
-            )}
-          </div>
+            </div>
+          ) : (
+            <pre className="json-raw-fallback">{jsonString}</pre>
+          )}
         </div>
-
       </div>
     </div>
   );

@@ -29,9 +29,11 @@ export default function ContextGauge({ telemetry, placement = 'top' }) {
   }, [isOpen]);
 
   const totalTokens = telemetry?.total_tokens ?? 0;
-  const contextWindow = telemetry?.context_window || 32768;
+  const contextWindow = telemetry?.context_window || 131072;
   const usagePct = telemetry?.usage_pct !== undefined ? telemetry.usage_pct : Math.round((totalTokens / contextWindow) * 100);
-  const status = telemetry?.status || (usagePct >= 82 ? 'critical' : usagePct >= 60 ? 'warning' : 'normal');
+  const squashPct = telemetry?.squash_threshold_pct ?? 70;
+  const compactPct = telemetry?.compact_threshold_pct ?? 80;
+  const status = telemetry?.status || (usagePct >= compactPct ? 'critical' : usagePct >= squashPct ? 'warning' : 'normal');
 
   const formatTokens = (val) => {
     if (val >= 1000) {
@@ -44,12 +46,12 @@ export default function ContextGauge({ telemetry, placement = 'top' }) {
   const ramTokens = telemetry?.virtual_ram_tokens || 0;
   const staticTokens = telemetry?.static_tokens || 0;
   const ephemeralTokens = telemetry?.ephemeral_tokens || 0;
+  const schemaTokens = telemetry?.schema_tokens || 0;
+  const providerPromptTokens = telemetry?.provider_prompt_tokens || 0;
+  const remainingHeadroom = Math.max(0, contextWindow - totalTokens);
   const squashed = Boolean(telemetry?.squashed);
   const evicted = Boolean(telemetry?.evicted);
   const rolledUp = Boolean(telemetry?.rolled_up);
-  const squashPct = telemetry?.squash_threshold_pct ?? 70;
-  const compactPct = telemetry?.compact_threshold_pct ?? 82;
-
   return (
     <div className={`context-gauge context-gauge--placement-${placement}`} ref={containerRef}>
       <button
@@ -107,6 +109,15 @@ export default function ContextGauge({ telemetry, placement = 'top' }) {
 
             <div className="context-gauge__row">
               <span className="context-gauge__row-key">
+                Headroom
+              </span>
+              <span className="context-gauge__row-val">
+                {remainingHeadroom.toLocaleString()} tokens
+              </span>
+            </div>
+
+            <div className="context-gauge__row">
+              <span className="context-gauge__row-key">
                 Static Layer
               </span>
               <span className="context-gauge__row-val">
@@ -142,6 +153,28 @@ export default function ContextGauge({ telemetry, placement = 'top' }) {
               </span>
             </div>
 
+            {schemaTokens > 0 && (
+              <div className="context-gauge__row">
+                <span className="context-gauge__row-key">
+                  Tool Schemas
+                </span>
+                <span className="context-gauge__row-val">
+                  {schemaTokens.toLocaleString()} tokens
+                </span>
+              </div>
+            )}
+
+            {providerPromptTokens > 0 && (
+              <div className="context-gauge__row">
+                <span className="context-gauge__row-key">
+                  Ollama Prompt
+                </span>
+                <span className="context-gauge__row-val">
+                  {providerPromptTokens.toLocaleString()} tokens
+                </span>
+              </div>
+            )}
+
             <div className="context-gauge__divider" />
 
             <div className="context-gauge__row">
@@ -155,17 +188,17 @@ export default function ContextGauge({ telemetry, placement = 'top' }) {
 
             <div className="context-gauge__row">
               <span className="context-gauge__row-key">
-                Eviction Limit
+                Compact Threshold
               </span>
               <span className="context-gauge__row-val">
                 {compactPct}% ({((contextWindow * compactPct / 100) / 1000).toFixed(1)}k)
               </span>
             </div>
 
-            {(squashed || evicted || rolledUp) && (
+            {status !== 'normal' && (squashed || evicted || rolledUp) && (
               <div className="context-gauge__alert">
                 {evicted
-                  ? 'Rolling FIFO eviction pruned earlier turns due to budget cap.'
+                  ? 'Macro-compaction active: earlier turns summarized at atomic boundary.'
                   : squashed
                   ? 'In-loop tool squashing active to preserve context headroom.'
                   : 'Milestone roll-up collapsed resolved intermediate failure loops.'}

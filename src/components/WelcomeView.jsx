@@ -28,7 +28,7 @@ export default function WelcomeView({
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
 
   const currentModelObj = models.find((m) => m.id === selectedModel) || {
-    name: selectedModel || 'qwen2.5-coder:14b',
+    name: selectedModel || 'qwen3:8b',
     compatibility_label: 'Optimal',
   };
 

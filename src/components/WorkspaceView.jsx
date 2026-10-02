@@ -27,6 +27,9 @@ export default function WorkspaceView({
   onRefreshModels,
   contextTelemetry,
   onStopAgent,
+  todoState,
+  checkpointTimeline = [],
+  onRewindToStep = null,
 }) {
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
   const isDragging = useRef(false);
@@ -112,6 +115,9 @@ export default function WorkspaceView({
             onRefreshModels={onRefreshModels}
             contextTelemetry={contextTelemetry}
             onStopAgent={onStopAgent}
+            todoState={todoState}
+            checkpointTimeline={checkpointTimeline}
+            onRewindToStep={onRewindToStep}
           />
         </div>
 

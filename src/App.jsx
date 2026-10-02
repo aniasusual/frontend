@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import WelcomeView from './components/WelcomeView';
 import WorkspaceView from './components/WorkspaceView';
 import { normalizeSubagentName, isSubagentTool } from './components/subagentUtils';
@@ -33,12 +33,13 @@ function App() {
   const [previewData, setPreviewData] = useState(null);
   const [lastChangeTimestamp, setLastChangeTimestamp] = useState(0);
   const [contextTelemetry, setContextTelemetry] = useState(null);
-
+  const [todoState, setTodoState] = useState(null);
+  const [checkpointTimeline, setCheckpointTimeline] = useState([]);
   // Hardware & Model States
   const [hardwareInfo, setHardwareInfo] = useState(null);
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState(
-    () => localStorage.getItem('lowkey_selected_model') || 'qwen2.5-coder:14b'
+    () => localStorage.getItem('lowkey_selected_model') || 'qwen3:8b'
   );
 
   const wsRef = useRef(null);
@@ -169,6 +170,62 @@ function App() {
           setContextTelemetry(data.telemetry);
           return;
         }
+        // Handle Real-Time Todo State Updates
+        if (data.type === 'todo_update' && data.phases) {
+          setTodoState({
+            op: data.op || 'view',
+            phases: data.phases,
+            timestamp: Date.now(),
+          });
+          return;
+        }
+        // Handle Real-Time Tool Stream Previews (Live Diffs for Edit)
+        if (data.type === 'tool_stream_preview') {
+          setMessages((prev) => {
+            const updated = [...prev];
+            for (let i = updated.length - 1; i >= 0; i--) {
+              if (updated[i].type === 'tool_call' && updated[i].name === 'edit') {
+                updated[i] = {
+                  ...updated[i],
+                  diff: data.diff,
+                  diffFile: data.file_path,
+                };
+                return updated;
+              }
+            }
+            return prev;
+          });
+          return;
+        }
+        // Handle Real-Time Checkpoint Events
+        if (data.type === 'checkpoint_step_captured') {
+          setCheckpointTimeline((prev) => {
+            const existing = prev.find((s) => s.step_id === data.step_id);
+            if (existing) return prev;
+            return [...prev, { step_id: data.step_id, label: data.label, timestamp: data.timestamp, file_count: data.file_count }];
+          });
+          return;
+        }
+        if (data.type === 'checkpoint_timeline') {
+          setCheckpointTimeline(Array.isArray(data.steps) ? data.steps : []);
+          return;
+        }
+        if (data.type === 'step_rewound' || data.type === 'checkpoint_rewound') {
+          if (Array.isArray(data.messages)) {
+            setMessages(data.messages);
+          } else if (data.step_id) {
+            setMessages((prev) => {
+              const targetIdx = prev.findIndex((m) => m.step_id === data.step_id);
+              if (targetIdx === -1) return prev;
+              return prev.slice(0, targetIdx);
+            });
+          }
+          setLastChangeTimestamp(Date.now());
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ action: 'list_checkpoints' }));
+          }
+          return;
+        }
         // Handle Ask Human Question Event
         if (data.type === 'ask_human') {
           setAgentStatus('awaiting_human');
@@ -227,6 +284,9 @@ function App() {
           } else {
             setPreviewData(null);
           }
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ action: 'list_checkpoints' }));
+          }
           return;
         }
 
@@ -272,13 +332,21 @@ function App() {
             );
             return [...collapsed, ...activeInFlight];
           });
+          const latestTelemetryMsg = [...loaded].reverse().find((m) => m?.debug?.context_telemetry);
+          if (latestTelemetryMsg?.debug?.context_telemetry) {
+            setContextTelemetry(latestTelemetryMsg.debug.context_telemetry);
+          } else if (data.telemetry) {
+            setContextTelemetry(data.telemetry);
+          }
           return;
         }
 
         // Handle Real-Time LLM Debug Inspection Payload
         if (data.type === 'llm_debug' && data.debug) {
+          if (data.debug.context_telemetry) {
+            setContextTelemetry(data.debug.context_telemetry);
+          }
           setMessages((prev) => {
-            if (prev.length === 0) return prev;
             const updated = [...prev];
             // Attach debug to the user message of this turn if needed
             const lastUserIdx = updated.map((m) => m.role === 'user' || m.type === 'user').lastIndexOf(true);
@@ -519,6 +587,17 @@ function App() {
   };
 
 
+  const handleRewindToStep = useCallback((stepId, report = '') => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(
+      JSON.stringify({
+        action: 'rewind_to_step',
+        step_id: stepId,
+        report: report || `User clicked rewind to ${stepId}`,
+      })
+    );
+  }, []);
+
   const handleGoToBrowser = () => {
     setAgentStatus(null);
     setCurrentView('welcome');
@@ -617,6 +696,9 @@ function App() {
           onRefreshModels={fetchModelsAndHardware}
           contextTelemetry={contextTelemetry}
           onStopAgent={handleStopAgent}
+          todoState={todoState}
+          checkpointTimeline={checkpointTimeline}
+          onRewindToStep={handleRewindToStep}
         />
       )}
     </div>

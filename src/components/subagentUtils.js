@@ -10,11 +10,6 @@ export const SUBAGENT_NAMES = [
   'security_reviewer',
   'troubleshoot',
   'design',
-  'invoke_design_agent',
-  'invoke_testing_agent',
-  'invoke_troubleshoot_agent',
-  'invoke_code_reviewer_agent',
-  'invoke_vision_agent',
 ];
 
 export const SUBAGENT_MAP = {
@@ -22,46 +17,35 @@ export const SUBAGENT_MAP = {
   testing: 'tester',
   testing_agent: 'tester',
   ui_testing_agent: 'tester',
-  invoke_testing_agent: 'tester',
 
   design: 'design',
   design_agent: 'design',
-  invoke_design_agent: 'design',
 
   troubleshoot: 'troubleshoot',
   troubleshoot_agent: 'troubleshoot',
-  invoke_troubleshoot_agent: 'troubleshoot',
 
   reviewer: 'reviewer',
   reviewer_agent: 'reviewer',
+  code_reviewer: 'reviewer',
   code_reviewer_agent: 'reviewer',
-  invoke_code_reviewer_agent: 'reviewer',
 
   security_reviewer: 'security_reviewer',
   security_reviewer_agent: 'security_reviewer',
 
   scout: 'scout',
-  task: 'task',
+  scout_agent: 'scout',
 
-  vision: 'invoke_vision_agent',
-  vision_agent: 'invoke_vision_agent',
-  vision_subagent: 'invoke_vision_agent',
-  invoke_vision_agent: 'invoke_vision_agent',
+  task: 'task',
 };
 
 export const SUBAGENT_DISPLAY_NAMES = {
   task: 'Task Subagent',
-  scout: 'Scout (Explorer)',
-  reviewer: 'Code Reviewer',
-  security_reviewer: 'Security Auditor',
+  scout: 'Scout Subagent',
+  reviewer: 'Code Reviewer Subagent',
+  security_reviewer: 'Security Reviewer Subagent',
   troubleshoot: 'Troubleshoot Subagent',
   design: 'Design Subagent',
   tester: 'UI Testing Subagent',
-  invoke_design_agent: 'Design Subagent',
-  invoke_testing_agent: 'UI Testing Subagent',
-  invoke_troubleshoot_agent: 'Troubleshoot Subagent',
-  invoke_code_reviewer_agent: 'Code Reviewer Subagent',
-  invoke_vision_agent: 'Vision Expert Subagent',
 };
 
 export function normalizeSubagentName(rawName) {

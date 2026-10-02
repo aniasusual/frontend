@@ -210,7 +210,7 @@ USER                  FRONTEND (React)             BACKEND (FastAPI)            
   2. `engine.py` launches an asynchronous coroutine `run_harness_task`.
   3. `CodingHarness` queries `AgentLoader` with the active model ID (e.g. `qwen2.5-coder:7b`).
   4. `AgentLoader` matches the model against YAML configurations (`config/agents/*.yaml`) to construct an `AgentProfile`:
-     - **Whitelisted Tools**: e.g., `read_file`, `write_file`, `write_files`, `edit_file`, `lint_javascript`, `get_assets`, `ask_human`, `finish`.
+     - **Whitelisted Tools**: e.g., `read_file`, `write_file`, `write_files`, `edit`, `lint_code`, `get_assets`, `ask_human`, `finish`.
      - **Active Subagents**: `invoke_design_agent`, `invoke_troubleshoot_agent`, `invoke_vision_agent`.
      - **System Prompt**: Injects the 6-phase engineering lifecycle instructions.
 
@@ -222,7 +222,7 @@ USER                  FRONTEND (React)             BACKEND (FastAPI)            
   1. Compacts previous chat history, removing raw code blocks and intermediate tool payloads from past turns to enforce a clean **Disk-First architecture**.
   2. Injects the system prompt at message index 0.
   3. Appends a **Recency Anchor** instruction to the user prompt:
-     `\n\n[Instruction: Directly execute tools (write_files, edit_file, read_file) to inspect and modify project files on disk. Do not output raw code blocks in chat.]`
+     `\n\n[Instruction: Directly execute tools (write_files, edit, read_file) to inspect and modify project files on disk. Do not output raw code blocks in chat.]`
   4. Truncates history if total messages exceed 30 turns.
 
 ---
@@ -320,7 +320,7 @@ All real-time communication between the UI and backend runs through the `/ws` en
 | `grep_search` | `tools/file_tools.py` | Performs keyword and regex searching across project files. |
 | `write_file` | `tools/file_tools.py` | Creates or overwrites a single file atomically. |
 | `write_files` | `tools/file_tools.py` | Writes multiple files simultaneously in one atomic batch. |
-| `edit_file` | `tools/file_tools.py` | Resilient string search-and-replace with fuzzy matching fallback. |
+ | `edit` | `tools/file_tools.py` | Canonical line-anchored Hashline patch engine with atomic AST validation. |
 | `insert_text` | `tools/file_tools.py` | Inserts text after a specified line number. |
 | `list_directory` | `tools/file_tools.py` | Lists directory contents with file size and type. |
 | `lint_javascript` | `tools/linter_tools.py` | Runs fast AST syntax and import checks on JS/JSX. |
